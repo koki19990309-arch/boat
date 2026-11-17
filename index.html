@@ -555,7 +555,7 @@ function showTab(t) {
   if (t === "seiseki" && TODAY) renderSeiseki();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
-const APP_VER = "2026111706";
+const APP_VER = "2026111707";
 async function checkVer(force) {   // 新しい版が出ていたら自動で読み込み直す
   try {
     const t = await fetch(`./?t=${Date.now()}`, { cache: "no-store" }).then(r => r.text());
@@ -592,8 +592,18 @@ $("reload").onclick = async () => {
   else if (k === "wait") { $("upd").textContent = "作成中…もう少し待ってください"; waitNewData(before); }
   else loadAll();
 };
-loadAll(); checkVer(false);
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVer(false); });
+async function autoKick() {   // データが15分以上古ければ、開いた時に自動で作り直しを頼む
+  if (!TODAY || !store.get("ghtoken", "")) return;
+  const now = nowHM(), h = +now.slice(0, 2);
+  if (h < 8 || h >= 22) return;
+  const [uh, um] = TODAY.updated.split(":").map(Number), [nh, nm] = now.split(":").map(Number);
+  const age = TODAY.date === todayJST() ? (nh * 60 + nm) - (uh * 60 + um) : 999;
+  if (age < 15) return;
+  const before = TODAY.updated, k = await kickUpdate();
+  if (k) { $("upd").textContent = "最新データを作成中…(1〜2分)"; waitNewData(before); }
+}
+loadAll().then(autoKick); checkVer(false);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVer(false).then(v => { if (!v) loadAll().then(autoKick); }); });
 </script>
 </body>
 </html>
