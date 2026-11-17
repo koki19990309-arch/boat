@@ -392,10 +392,7 @@ function renderSeiseki() {
       ${recent.some(([r, , pay]) => pay && r.amt) ? `<div class="sec">当たった買い目</div>` + table(["レース", "買い目", "配当", "払戻"],
         recent.filter(([r, , pay]) => pay && r.amt).reverse().slice(0, 30).map(([r, , pay]) => [`${r.d.slice(5)} ${esc(r.v)}${r.rn}R`, `<span class="sub">${r.kind[0]}単</span> <b>${r.c}</b>`, yen(pay), `<b style="color:var(--gold)">${yen(pay * r.amt / 100)}</b>`])) : ""}
       ${sk ? `<div class="note">参考: 見送った${sk}点を100円ずつ買っていたら 回収率 ${Math.round(skb / sk)}%</div>` : ""}
-      <div class="sec">最近の判定</div>${table(["買い目", "結果"], recent.slice(-10).reverse().map(([r, res, pay]) =>
-        [`${r.d.slice(5)} ${esc(r.v)}${r.rn}R <span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍 ${r.m}</span>`,
-         pay === null ? `<span class="sub">結果待ち</span>` : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
-        recent.slice(-10).reverse().map(([, , pay]) => pay ? "hlgold" : ""))}
+      ${dayView(recent)}
       <button class="btn sub2" onclick="copyJudges()">記録をコピー(手動バックアップ)</button></div>`;
   } else h += `<div class="card"><div class="ttl">あなたの判定の成績</div><div class="note">「判定」でオッズを入れると記録され、ここに成績が出ます。</div></div>`;
   h += store.get("ghtoken", "")
@@ -429,6 +426,21 @@ function renderSeiseki() {
       <div class="note">件数が少ないうちは、たまたまの影響が大きいです。100件以上たまってから判断してください。</div></div>`;
   }
   $("sout").innerHTML = h;
+}
+let JDAY = null;
+function dayView(recent) {
+  const ds = [...new Set(recent.map(([r]) => r.d))].sort().reverse();
+  if (!ds.includes(JDAY)) JDAY = ds[0];
+  const rs = recent.filter(([r]) => r.d === JDAY).sort((x, y) => (x[0].t || "").localeCompare(y[0].t || "") || x[0].sn - y[0].sn || x[0].rn - y[0].rn);
+  let buy = 0, back = 0, hit = 0;
+  for (const [r, , pay] of rs) if (r.amt && pay !== null) { buy += r.amt; back += pay * r.amt / 100; if (pay) hit++; }
+  return `<div class="sec">日ごとの判定</div>
+    <div class="chips">${ds.slice(0, 14).map(d => `<button class="chip ${d === JDAY ? "on" : ""}" onclick="JDAY='${d}';renderSeiseki()">${d.slice(5).replace("-", "/")}</button>`).join("")}</div>
+    <div class="sub">${JDAY.slice(5).replace("-", "/")} の判定 ${rs.length}件${buy ? `・◎購入 ${yen(buy)}・払戻 ${yen(back)}・収支 ${pm(back - buy)}` : ""}</div>` +
+    table(["買い目", "結果"], rs.map(([r, res, pay]) =>
+      [`${esc(r.v)}${r.rn}R <span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍</span> <span style="color:${COLOR[r.m] || "inherit"}">${r.m}</span>${r.amt ? ` <span class="sub">${yen(r.amt)}</span>` : ""}`,
+       pay === null ? `<span class="sub">結果待ち</span>` : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
+      rs.map(([, , pay]) => pay ? "hlgold" : ""));
 }
 function copyJudges() {
   const js = store.get("judges", []);
