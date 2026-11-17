@@ -10,7 +10,7 @@ on:
         description: "学習に使う日数"
         default: "90"
       mode:
-        description: "backtest(今の買い方) / blend(オッズと混ぜる) / search(買い方を探す) / experiment(ChatGPT案)"
+        description: "backtest(今の買い方) / blend(オッズと混ぜる) / search(買い方を探す) / experiment(ChatGPT案) / export(過去データ書き出し)"
         default: "backtest"
 
 permissions:
@@ -37,14 +37,28 @@ jobs:
           restore-keys: data-
       - name: 検証する
         run: |
-          if [ "${{ inputs.mode }}" = "blend" ]; then python blend.py; elif [ "${{ inputs.mode }}" = "search" ]; then python search.py; elif [ "${{ inputs.mode }}" = "experiment" ]; then python experiment.py; else python backtest.py "${{ inputs.test_days }}" "${{ inputs.train_days }}"; fi
+          if [ "${{ inputs.mode }}" = "blend" ]; then python blend.py; elif [ "${{ inputs.mode }}" = "search" ]; then python search.py; elif [ "${{ inputs.mode }}" = "experiment" ]; then python experiment.py; elif [ "${{ inputs.mode }}" = "export" ]; then python export.py; else python backtest.py "${{ inputs.test_days }}" "${{ inputs.train_days }}"; fi
       - uses: actions/cache/save@v4
         if: always()
         continue-on-error: true
         with:
           path: cache
           key: data-backtest-${{ github.run_id }}
+      - name: 過去データを export ブランチに置く
+        if: inputs.mode == 'export'
+        run: |
+          git config user.name "boatrace-bot"
+          git config user.email "boatrace-bot@users.noreply.github.com"
+          cp export/boatrace_2026.zip /tmp/
+          git checkout -q --orphan export
+          git rm -rq --cached . && git clean -fdq -e cache
+          cp /tmp/boatrace_2026.zip .
+          git add boatrace_2026.zip
+          git commit -q -m "過去データ(2026年1月〜)"
+          git push -qf origin export
+          git checkout -q main
       - name: 結果を保存
+        if: inputs.mode != 'export'
         run: |
           git config user.name "boatrace-bot"
           git config user.email "boatrace-bot@users.noreply.github.com"
