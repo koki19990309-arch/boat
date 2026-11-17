@@ -1,0 +1,50 @@
+name: ◎の買い方の検証
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_days:
+        description: "検証する日数"
+        default: "60"
+      train_days:
+        description: "学習に使う日数"
+        default: "90"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: boatrace-backtest
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q numpy scikit-learn requests
+      - uses: actions/cache/restore@v4
+        with:
+          path: cache
+          key: data-backtest
+          restore-keys: data-
+      - name: 検証する
+        run: python backtest.py "${{ inputs.test_days }}" "${{ inputs.train_days }}"
+      - uses: actions/cache/save@v4
+        if: always()
+        continue-on-error: true
+        with:
+          path: cache
+          key: data-backtest-${{ github.run_id }}
+      - name: 結果を保存
+        run: |
+          git config user.name "boatrace-bot"
+          git config user.email "boatrace-bot@users.noreply.github.com"
+          git add data/backtest.json
+          git diff --cached --quiet && exit 0
+          git commit -q -m "◎の買い方の検証結果"
+          for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
