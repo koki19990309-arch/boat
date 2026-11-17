@@ -279,15 +279,26 @@ function raceCard(r) {
     <div class="sec">3連単</div>${table(["買い目", "確率", "買える倍率"], t3.map(([q, a, bb, c], i) => [`${"①②③"[i]} <span class="kume">${a}-${bb}-${c}</span>`, pct(q), `<b>${Math.round(need / q)}</b>倍〜`]))}
     <button class="btn sub2" onclick="toHantei(${r.sn},${r.rn})">展示・オッズを入れて判定</button></div>`;
 }
+let SHOWPAST = false;
 function renderYoso() {
   const now = nowHM(), isToday = TODAY.date === todayJST();
   const venues = [...new Set(TODAY.races.map(r => r.name))];
   $("vchips").innerHTML = ["全会場", ...venues].map(v => `<button class="chip ${v === VENUE ? "on" : ""}" onclick="VENUE='${v}';SHOWN=12;renderYoso()">${v}</button>`).join("");
-  const list = TODAY.races.filter(r => (!isToday || r.close >= now) && (VENUE === "全会場" || r.name === VENUE));
-  $("ylist").innerHTML = list.length ? list.slice(0, SHOWN).map(raceCard).join("")
-    : `<div class="card">これからのレースはありません。<div class="note">データは8時〜21時の間、15分ごとに更新されます。</div></div>`;
+  const inV = r => VENUE === "全会場" || r.name === VENUE;
+  const list = TODAY.races.filter(r => (!isToday || r.close > now) && inV(r));
+  const past = isToday ? TODAY.races.filter(r => r.close <= now && inV(r)).reverse() : [];
+  $("ylist").innerHTML = (list.length ? list.slice(0, SHOWN).map(raceCard).join("")
+    : `<div class="card">これからのレースはありません。</div>`) +
+    (past.length ? `<button class="btn sub2" onclick="SHOWPAST=!SHOWPAST;renderYoso()">${SHOWPAST ? "締切済みのレースを隠す" : `締切済みのレース(${past.length})を見る`}</button>` +
+      (SHOWPAST ? `<div class="card">${table(["レース", "予想(2単)", "着順"], past.map(r => {
+        const { p0 } = PRED[`${r.sn}-${r.rn}`], e2 = ex2(p0).slice(0, 2).map(([, a, b]) => `${a}-${b}`);
+        const res = r.res ? r.res.o : null, hit = res && e2.includes(res.slice(0, 3));
+        return [`<span class="sub">${r.close}</span> ${esc(r.name)}${r.rn}R`, e2.join(" "), res ? `<b>${res}</b>${hit ? " ⭐" : ""}` : `<span class="sub">-</span>`];
+      }), past.map(r => r.res && ex2(PRED[`${r.sn}-${r.rn}`].p0).slice(0, 2).some(([, a, b]) => `${a}-${b}` === r.res.o.slice(0, 3)) ? "hlgold" : ""))}
+        <div class="note">着順は結果データが届いたレースだけ出ます(1日に数回まとめて届きます)</div></div>` : "") : "");
   $("ymore").classList.toggle("hide", list.length <= SHOWN);
 }
+setInterval(() => { if (TODAY && !$("yoso").classList.contains("hide")) renderYoso(); }, 60000);
 $("ymore").onclick = () => { SHOWN += 12; renderYoso(); };
 
 // ---- 判定 ----
@@ -555,7 +566,7 @@ function showTab(t) {
   if (t === "seiseki" && TODAY) renderSeiseki();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
-const APP_VER = "2026111707";
+const APP_VER = "2026111708";
 async function checkVer(force) {   // 新しい版が出ていたら自動で読み込み直す
   try {
     const t = await fetch(`./?t=${Date.now()}`, { cache: "no-store" }).then(r => r.text());
