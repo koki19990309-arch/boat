@@ -149,7 +149,8 @@ def make_stats(rows):
         e2 = [float(r["2単払戻"]) for r in rs]
         e3 = [float(r["3単払戻"]) for r in rs]
         return {"n": n, "h2": sum(1 for v in e2 if v > 0), "r2": sum(e2) / (200 * n),
-                "h3": sum(1 for v in e3 if v > 0), "r3": sum(e3) / (300 * n)}
+                "h3": sum(1 for v in e3 if v > 0), "r3": sum(e3) / (300 * n),
+                "b2": 200 * n, "p2": sum(e2), "b3": 300 * n, "p3": sum(e3)}
     by = lambda k: {v: agg([r for r in rows if r[k] == v]) for v in sorted({r[k] for r in rows})}
     days = sorted({r["日付"] for r in rows})
     res = {}
@@ -158,7 +159,9 @@ def make_stats(rows):
             res.setdefault(r["日付"], {})[f'{r["場番号"]}-{r["R"]}'] = [r["結果"], float(r["2単的中払戻"]), float(r["3単的中払戻"])]
     return {"all": agg(rows), "level": by("自信"), "venue": by("会場"),
             "days": {d: agg([r for r in rows if r["日付"] == d]) for d in days[-14:]},
-            "results": res, "n_days": len(days)}
+            "results": res, "n_days": len(days),
+            "hits": [[r["日付"], r["会場"], int(r["R"]), r["自信"], r["結果"], float(r["2単払戻"]), float(r["3単払戻"])]
+                     for r in rows if float(r["2単払戻"]) > 0 or float(r["3単払戻"]) > 0][-60:]}
 
 
 def cmd_update():

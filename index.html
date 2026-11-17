@@ -179,6 +179,8 @@ const badge = (t, c) => `<span class="badge" style="background:${c}">${esc(t)}</
 const pct = q => `<span class="sub">${Math.round(q * 100)}%</span>`;
 const yen = v => Math.round(v).toLocaleString("ja-JP") + "円";
 const rc = r => `<b style="color:${r >= 1 ? "var(--green)" : "var(--red)"}">${Math.round(r * 100)}%</b>`;
+const pm = v => `<span style="color:${v >= 0 ? "var(--green)" : "var(--red)"}">${v >= 0 ? "+" : "-"}${yen(Math.abs(v))}</span>`;
+const rcy = (r, b, p) => b == null ? rc(r) : `${rc(r)}<br><span class="sub" style="font-size:12px">${pm(p - b)}</span>`;
 const big = (l, v, c) => `<div><div class="l">${l}</div><div class="v" ${c ? `style="color:${c}"` : ""}>${v}</div></div>`;
 function table(head, rows, hl) {
   return `<table><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr>${rows.map((r, i) =>
@@ -386,7 +388,9 @@ function renderSeiseki() {
     h += `<div class="card"><div class="row"><div class="ttl">あなたの判定の成績</div>${badge(js.length + "件", "var(--blue)")}</div>
       <div class="sub">この端末に記録した判定(結果待ち ${wait}件)</div>
       ${nb ? `<div class="big">${big("◎で買った", nb + "点")}${big("的中", hit + "回")}${big("回収率", Math.round(back / buy * 100) + "%", back >= buy ? "var(--green)" : "var(--red)")}</div>
-      ${table(["", ""], [["購入", yen(buy)], ["払戻", yen(back)]])}` : `<div class="note">◎の買い目の結果がまだありません</div>`}
+      ${table(["", ""], [["購入", yen(buy)], ["払戻", yen(back)], ["収支", pm(back - buy)]])}` : `<div class="note">◎の買い目の結果がまだありません</div>`}
+      ${recent.some(([r, , pay]) => pay && r.amt) ? `<div class="sec">当たった買い目</div>` + table(["レース", "買い目", "配当", "払戻"],
+        recent.filter(([r, , pay]) => pay && r.amt).reverse().slice(0, 30).map(([r, , pay]) => [`${r.d.slice(5)} ${esc(r.v)}${r.rn}R`, `<span class="sub">${r.kind[0]}単</span> <b>${r.c}</b>`, yen(pay), `<b style="color:var(--gold)">${yen(pay * r.amt / 100)}</b>`])) : ""}
       ${sk ? `<div class="note">参考: 見送った${sk}点を100円ずつ買っていたら 回収率 ${Math.round(skb / sk)}%</div>` : ""}
       <div class="sec">最近の判定</div>${table(["買い目", "結果"], recent.slice(-10).reverse().map(([r, res, pay]) =>
         [`${r.d.slice(5)} ${esc(r.v)}${r.rn}R <span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍 ${r.m}</span>`,
@@ -408,16 +412,20 @@ function renderSeiseki() {
   if (STATS && STATS.all) {
     const a = STATS.all;
     const tier = ["◎", "○", "△"].filter(k => STATS.level[k]).map(k => { const s = STATS.level[k];
-      return [`${badge(k + " " + { "◎": "堅い", "○": "ふつう", "△": "荒れ注意" }[k], COLOR[k])} <span class="sub">${s.n}R</span>`, rc(s.r2), rc(s.r3)]; });
-    const days = Object.entries(STATS.days).slice(-7).reverse().map(([d, s]) => [`${d.slice(5)} <span class="sub">${s.n}R</span>`, rc(s.r2), rc(s.r3)]);
-    const ven = Object.entries(STATS.venue).sort((x, y) => y[1].n - x[1].n).map(([v, s]) => [`${esc(v)} <span class="sub">${s.n}R</span>`, rc(s.r2), rc(s.r3)]);
+      return [`${badge(k + " " + { "◎": "堅い", "○": "ふつう", "△": "荒れ注意" }[k], COLOR[k])} <span class="sub">${s.n}R</span>`, rcy(s.r2, s.b2, s.p2), rcy(s.r3, s.b3, s.p3)]; });
+    const days = Object.entries(STATS.days).slice(-7).reverse().map(([d, s]) => [`${d.slice(5)} <span class="sub">${s.n}R</span>`, rcy(s.r2, s.b2, s.p2), rcy(s.r3, s.b3, s.p3)]);
+    const ven = Object.entries(STATS.venue).sort((x, y) => y[1].n - x[1].n).map(([v, s]) => [`${esc(v)} <span class="sub">${s.n}R</span>`, rcy(s.r2, s.b2, s.p2), rcy(s.r3, s.b3, s.p3)]);
     h += `<div class="card"><div class="row"><div class="ttl">全レース買った場合(各100円)</div>${badge(STATS.n_days + "日分", "var(--blue)")}</div>
       <div class="sub">${a.n.toLocaleString()}レース・自動で毎日記録</div>
       <div class="sec">2連単2点</div><div class="big">${big("的中率", Math.round(a.h2 / a.n * 100) + "%")}${big("回収率", Math.round(a.r2 * 100) + "%", a.r2 >= 1 ? "var(--green)" : "var(--red)")}</div>
+      ${a.b2 != null ? table(["購入", "払戻", "収支"], [[yen(a.b2), yen(a.p2), `<b>${pm(a.p2 - a.b2)}</b>`]]) : ""}
       <div class="sec">3連単3点</div><div class="big">${big("的中率", Math.round(a.h3 / a.n * 100) + "%")}${big("回収率", Math.round(a.r3 * 100) + "%", a.r3 >= 1 ? "var(--green)" : "var(--red)")}</div>
+      ${a.b3 != null ? table(["購入", "払戻", "収支"], [[yen(a.b3), yen(a.p3), `<b>${pm(a.p3 - a.b3)}</b>`]]) : ""}
       <div class="sec">自信度別の回収率</div>${table(["自信度", "2連単", "3連単"], tier)}
       <div class="sec">最近7日の回収率</div>${table(["日付", "2連単", "3連単"], days)}
       <div class="sec">会場別の回収率</div>${table(["会場", "2連単", "3連単"], ven)}
+      ${STATS.hits && STATS.hits.length ? `<div class="sec">当たったレース(最近${Math.min(STATS.hits.length, 30)}件)</div>` + table(["レース", "結果", "2連単", "3連単"],
+        STATS.hits.slice(-30).reverse().map(([d, v, rn, lv, res, p2, p3]) => [`${d.slice(5)} ${esc(v)}${rn}R <span style="color:${COLOR[lv]}">${lv}</span>`, `<b>${res}</b>`, p2 ? `<b style="color:var(--gold)">${yen(p2)}</b>` : "-", p3 ? `<b style="color:var(--gold)">${yen(p3)}</b>` : "-"])) + `<div class="note">配当は100円あたり</div>` : ""}
       <div class="note">件数が少ないうちは、たまたまの影響が大きいです。100件以上たまってから判断してください。</div></div>`;
   }
   $("sout").innerHTML = h;
