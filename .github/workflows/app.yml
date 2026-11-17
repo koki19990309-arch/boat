@@ -11,6 +11,9 @@ on:
     - cron: "0 12 * * *"
     - cron: "30 12 * * *"
   workflow_dispatch:
+  # アプリの「更新」ボタンから
+  repository_dispatch:
+    types: [update]
 
 permissions:
   contents: write

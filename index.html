@@ -455,7 +455,7 @@ function showTab(t) {
   if (t === "seiseki" && TODAY) renderSeiseki();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
-const APP_VER = "2026111701";
+const APP_VER = "2026111702";
 async function checkVer(force) {   // 新しい版が出ていたら自動で読み込み直す
   try {
     const t = await fetch(`./?t=${Date.now()}`, { cache: "no-store" }).then(r => r.text());
@@ -465,7 +465,33 @@ async function checkVer(force) {   // 新しい版が出ていたら自動で読
   if (force) location.replace(`./?v=${APP_VER}&t=${Date.now()}`);
   return false;
 }
-$("reload").onclick = () => { $("upd").textContent = "読み込み中…"; checkVer(true); };
+async function kickUpdate() {   // GitHubにデータ作り直しを頼む(トークンがある時だけ)
+  const tok = store.get("ghtoken", "");
+  if (!tok || !TODAY) return false;
+  const last = store.get("kicked", 0), age = (Date.now() - last) / 60000;
+  if (age < 4) return "wait";
+  const r = await fetch(`https://api.github.com/repos/${REPO}/dispatches`, { method: "POST",
+    headers: { Authorization: `Bearer ${tok}`, Accept: "application/vnd.github+json" }, body: JSON.stringify({ event_type: "update" }) }).catch(() => null);
+  if (!r || !r.ok) return false;
+  store.set("kicked", Date.now()); return true;
+}
+async function waitNewData(before) {
+  for (let i = 0; i < 16; i++) {
+    await new Promise(ok => setTimeout(ok, 15000));
+    try { const tj = await fetch(`data/today.json?t=${Date.now()}`, { cache: "no-store" }).then(r => r.json());
+      if (tj.updated !== before || tj.date !== TODAY.date) { await loadAll(); return; } } catch (e) {}
+    $("upd").textContent = `最新データを作成中…(${Math.round((i + 1) * 15)}秒)`;
+  }
+  await loadAll();
+}
+$("reload").onclick = async () => {
+  $("upd").textContent = "読み込み中…";
+  if (await checkVer(false)) return;
+  const before = TODAY && TODAY.updated, k = await kickUpdate();
+  if (k === true) { $("upd").textContent = "最新データを作成中…(1〜2分)"; waitNewData(before); }
+  else if (k === "wait") { $("upd").textContent = "作成中…もう少し待ってください"; waitNewData(before); }
+  else loadAll();
+};
 loadAll(); checkVer(false);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVer(false); });
 </script>
