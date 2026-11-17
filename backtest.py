@@ -176,6 +176,19 @@ def main():
            "maru_level": {lv: {k: agg([b for b in maru if b["kind"] == k and b["lv"] == lv]) for k in ("2連単", "3連単")}
                           for lv in ("◎", "○", "△")},
            "ev": {}, "odds_band": {}, "weeks": {}}
+    # 自信度ごと: 全部買い・期待値の基準別・前半/後半
+    mid = sorted({b["d"] for b in bets})[len({b["d"] for b in bets}) // 2]
+    out["level"] = {}
+    for lv in ("◎", "○", "△"):
+        L = [b for b in bets if b["lv"] == lv]
+        out["level"][lv] = {"races": len({(b["d"], b["sn"], b["rn"]) for b in L}),
+                            "all": {k: agg([b for b in L if b["kind"] == k]) for k in ("2連単", "3連単")},
+                            "ev": {str(th): {k: agg([b for b in L if b["kind"] == k and b["e"] >= th]) for k in ("2連単", "3連単")}
+                                   for th in (1.0, 1.1, 1.2, 1.5, 2.0)},
+                            "half": {h: {k: agg([b for b in L if b["kind"] == k and (b["d"] < mid) == (h == "前半")]) for k in ("2連単", "3連単")}
+                                     for h in ("前半", "後半")},
+                            "half_maru": {h: {k: agg([b for b in L if b["kind"] == k and b["e"] >= b["need"] and (b["d"] < mid) == (h == "前半")]) for k in ("2連単", "3連単")}
+                                          for h in ("前半", "後半")}}
     for th in (0.8, 1.0, 1.1, 1.2, 1.3, 1.5, 2.0):
         out["ev"][str(th)] = {k: agg([b for b in bets if b["kind"] == k and b["e"] >= th]) for k in ("2連単", "3連単")}
     bands = [(0, 5), (5, 10), (10, 20), (20, 50), (50, 1e9)]
