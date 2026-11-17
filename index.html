@@ -88,6 +88,14 @@ textarea{min-height:70px;resize:vertical}
 </section>
 
 <section id="seiseki" class="hide">
+  <div class="card">
+    <div class="ttl">結果を入れる</div>
+    <div class="sub">競艇日和の「結果」画面で払戻金の表を長押し→コピーして貼るか、Claudeが返した1行を貼る</div>
+    <textarea id="kekka" placeholder="唐津 3R / 結果 125 7180 / 12 740"></textarea>
+    <div class="two"><div><label>会場(貼った文から自動)</label><select id="kk"></select></div><div><label>レース</label><select id="kr"></select></div></div>
+    <button class="btn" id="kgo">結果を記録</button>
+    <div id="kout"></div>
+  </div>
   <div id="sout"></div>
 </section>
 </main>
@@ -243,7 +251,7 @@ async function loadAll() {
     PRED = {};
     for (const r of TODAY.races) PRED[`${r.sn}-${r.rn}`] = predict(MODEL, r, r.pv);
     $("upd").textContent = `データ ${TODAY.date.slice(5).replace("-", "/")} ${TODAY.updated}更新`;
-    renderYoso(); fillSelects(); renderSeiseki();
+    renderYoso(); fillSelects(); fillK(); renderSeiseki();
     syncJudges(true).then(() => { if (!$("seiseki").classList.contains("hide")) renderSeiseki(); });
   } catch (e) {
     $("upd").textContent = "読み込めませんでした";
@@ -368,11 +376,12 @@ $("clr").onclick = () => { for (const id of ["kantan", "tenji", "st", "shin", "w
 // ---- 成績 ----
 function resultOf(d, sn, rn) {
   if (TODAY && TODAY.date === d) { const r = TODAY.races.find(x => x.sn === sn && x.rn === rn); if (r && r.res) return [r.res.o, r.res.ex, r.res.tri]; }
-  return STATS && STATS.results && STATS.results[d] ? STATS.results[d][`${sn}-${rn}`] : null;
+  const auto = STATS && STATS.results && STATS.results[d] ? STATS.results[d][`${sn}-${rn}`] : null;
+  return auto || manualRes(d, sn, rn);
 }
 function renderSeiseki() {
   let h = "";
-  const js = store.get("judges", []);
+  const js = store.get("judges", []).filter(r => r.kind !== "結果");
   if (js.length) {
     let buy = 0, back = 0, nb = 0, hit = 0, sk = 0, skb = 0, wait = 0;
     const recent = [];
@@ -427,6 +436,67 @@ function renderSeiseki() {
   }
   $("sout").innerHTML = h;
 }
+// ---- 結果の手入力 ----
+function parseKekka(text) {
+  const t = Z(text).replace(/[＝=]/g, "=").replace(/\r/g, "");
+  const out = {};
+  const nm = [...NAMES].sort((a, b) => b.length - a.length).find(n => t.includes(n));
+  if (nm) out.sn = NAMES.indexOf(nm) + 1;
+  const rm = t.match(/(\d{1,2})\s*R/i); if (rm && +rm[1] >= 1 && +rm[1] <= 12) out.rn = +rm[1];
+  const KW = /(3連単|3連複|2連単|2連複|拡連複|単勝|複勝)/g;
+  if (/3連単/.test(t)) {   // 競艇日和の表をコピーした文
+    const parts = t.split(KW);
+    for (let i = 1; i < parts.length; i += 2) {
+      const kind = parts[i], body = parts[i + 1] || "";
+      const am = body.match(/([\d,]+)\s*円/); if (!am) continue;
+      const digs = body.slice(0, am.index).replace(/\d{2,}/g, "").match(/[1-6]/g) || [];
+      const pay = parseInt(am[1].replace(/,/g, ""));
+      if (kind === "3連単" && digs.length >= 3 && !out.tri) { out.o = digs.slice(0, 3).join("-"); out.tri = pay; }
+      if (kind === "2連単" && digs.length >= 2 && !out.ex) { out.e = digs.slice(0, 2).join("-"); out.ex = pay; }
+    }
+  } else {   // 「結果 125 7180 / 12 740」形式
+    const body = t.replace(/^[^\/]*R/i, "").replace(/結果/g, " ").replace(/(\d),(\d{3})/g, "$1$2");
+    const tk = body.split(/[\s,\/円]+/).filter(Boolean);
+    for (let i = 0; i < tk.length - 1; i++) {
+      const c = tk[i].replace(/-/g, ""), pay = parseInt(tk[i + 1].replace(/,/g, ""));
+      if (/^[1-6]{3}$/.test(c) && new Set(c).size === 3 && !out.tri) { out.o = c.split("").join("-"); out.tri = pay; i++; }
+      else if (/^[1-6]{2}$/.test(c) && c[0] !== c[1] && !out.ex) { out.e = c.split("").join("-"); out.ex = pay; i++; }
+    }
+  }
+  if (out.o && !out.e) { out.e = out.o.slice(0, 3); }
+  return out;
+}
+function fillK(sn, rn) {
+  const cs = sn || Number($("kk").value) || Number($("hk").value) || 1;
+  $("kk").innerHTML = NAMES.map((n, i) => `<option value="${i + 1}" ${i + 1 === cs ? "selected" : ""}>${n}</option>`).join("");
+  const cr = rn || Number($("kr").value) || 1;
+  $("kr").innerHTML = Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === cr ? "selected" : ""}>${i + 1}R</option>`).join("");
+}
+function manualRes(d, sn, rn) {
+  const r = store.get("judges", []).filter(x => x.kind === "結果" && x.d === d && x.sn === sn && x.rn === rn).pop();
+  return r ? r.res : null;
+}
+function kekka() {
+  const k = parseKekka($("kekka").value);
+  if (k.sn || k.rn) fillK(k.sn, k.rn);
+  const sn = Number($("kk").value), rn = Number($("kr").value);
+  if (!k.o || !k.tri) { $("kout").innerHTML = `<div class="warn">3連単の組番と払戻金が読めませんでした。表の「勝式」から「複勝」まで選んでコピーしてください。</div>`; return; }
+  if (!k.ex) { $("kout").innerHTML = `<div class="warn">2連単の払戻金が読めませんでした。2連単の行も入るようにコピーしてください。</div>`; return; }
+  const d = todayJST(), res = [k.o, k.ex, k.tri];
+  const all = store.get("judges", []).filter(x => !(x.kind === "結果" && x.d === d && x.sn === sn && x.rn === rn));
+  all.push({ d, t: nowHM(), sn, v: NAMES[sn - 1], rn, kind: "結果", c: "RES", res, m: "", amt: 0 });
+  store.set("judges", all);
+  const mine = all.filter(x => x.kind !== "結果" && x.d === d && x.sn === sn && x.rn === rn);
+  const hits = mine.filter(x => (x.kind === "2連単" ? k.e : k.o) === x.c);
+  $("kout").innerHTML = `<div class="note">📝 ${NAMES[sn - 1]} ${rn}R の結果を記録: <b>${k.o}</b>(3連単 ${yen(k.tri)}・2連単 ${yen(k.ex)})</div>` +
+    (mine.length ? (hits.length ? hits.map(x => `<div>${badge("★ 的中 " + x.kind + " " + x.c + " " + yen((x.kind === "2連単" ? k.ex : k.tri) * (x.amt || 100) / 100), "var(--gold)")}</div>`).join("") : `<div class="sub">判定した買い目 ${mine.length}点はハズレでした</div>`)
+      : `<div class="sub">このレースの判定はありません(今日の日付で記録しました)</div>`);
+  $("kekka").value = "";
+  renderSeiseki();
+  if (store.get("ghtoken", "")) syncJudges(true);
+}
+$("kgo").onclick = kekka;
+
 let JDAY = null;
 function dayView(recent) {
   const ds = [...new Set(recent.map(([r]) => r.d))].sort().reverse();
@@ -443,7 +513,7 @@ function dayView(recent) {
       rs.map(([, , pay]) => pay ? "hlgold" : ""));
 }
 function copyJudges() {
-  const js = store.get("judges", []);
+  const js = store.get("judges", []).filter(r => r.kind !== "結果");
   const t = "日付,時刻,会場,R,券種,買い目,オッズ,確率,期待値,判定,購入額\n" + js.map(r => [r.d, r.t, r.v, r.rn, r.kind, r.c, r.o, r.q, r.e, r.m, r.amt].join(",")).join("\n");
   navigator.clipboard.writeText(t).then(() => alert("コピーしました。メモなどに貼って保存できます"), () => prompt("コピーしてください", t));
 }
@@ -455,7 +525,7 @@ function showTab(t) {
   if (t === "seiseki" && TODAY) renderSeiseki();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
-const APP_VER = "2026111702";
+const APP_VER = "2026111703";
 async function checkVer(force) {   // 新しい版が出ていたら自動で読み込み直す
   try {
     const t = await fetch(`./?t=${Date.now()}`, { cache: "no-store" }).then(r => r.text());
