@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ボート予想">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icon.png">
+<title>ボート予想</title>
+<style>
+:root{--bg:#f3f5f8;--card:#fff;--ink:#1f2328;--sub:#57606a;--line:#e3e8ee;--alt:#f6f8fa;--blue:#0969da;--green:#1a7f37;--red:#cf222e;--orange:#bc4c00;--gold:#9a6700;--hlg:#dafbe1;--hly:#fff8c5;--hlgold:#fff3d6;--shadow:0 1px 3px rgba(0,0,0,.08)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0d1117;--card:#161b22;--ink:#e6edf3;--sub:#8d96a0;--line:#30363d;--alt:#1c2128;--blue:#4493f8;--green:#3fb950;--red:#f85149;--orange:#db6d28;--gold:#d29922;--hlg:#12361f;--hly:#3a3416;--hlgold:#3b2f12;--shadow:none}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;font-size:15px;line-height:1.5;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:calc(env(safe-area-inset-top) + 8px) 16px 0}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:18px;margin:0}
+.upd{font-size:12px;color:var(--sub)}
+.tabs{display:flex;margin-top:8px}
+.tabs button{flex:1;border:0;background:none;color:var(--sub);font-size:15px;font-weight:600;padding:10px 0;border-bottom:3px solid transparent}
+.tabs button.on{color:var(--blue);border-bottom-color:var(--blue)}
+main{padding:12px 16px calc(env(safe-area-inset-bottom) + 24px);max-width:600px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0;box-shadow:var(--shadow)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ttl{font-weight:700;font-size:16px}
+.sub{color:var(--sub);font-size:13px}
+.badge{display:inline-block;color:#fff;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:700;white-space:nowrap}
+.sec{margin:12px 0 2px;font-weight:700;font-size:14px;border-left:4px solid var(--blue);padding-left:8px}
+table{width:100%;border-collapse:collapse;margin-top:6px;font-size:14px;font-variant-numeric:tabular-nums}
+th{font-size:12px;color:var(--sub);font-weight:600;text-align:right;padding:4px;border-bottom:2px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
+tr:nth-child(even) td{background:var(--alt)}
+tr.hlg td{background:var(--hlg)} tr.hly td{background:var(--hly)} tr.hlgold td{background:var(--hlgold)}
+.kume{font-weight:700;font-size:18px;letter-spacing:1px}
+.big{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.big>div{flex:1;min-width:80px;text-align:center;padding:6px;border-radius:10px;background:var(--alt)}
+.big .l{font-size:12px;color:var(--sub)} .big .v{font-size:21px;font-weight:700}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:4px 0;-webkit-overflow-scrolling:touch}
+.chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:14px}
+.chip.on{background:var(--blue);border-color:var(--blue);color:#fff}
+label{display:block;font-size:13px;color:var(--sub);margin-top:10px}
+input,select,textarea{width:100%;font-size:16px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-family:inherit}
+textarea{min-height:70px;resize:vertical}
+.two{display:flex;gap:8px}.two>*{flex:1}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:13px;font-size:16px;font-weight:700;margin-top:12px;background:var(--blue);color:#fff}
+.btn.sub2{background:var(--alt);color:var(--ink);border:1px solid var(--line);font-weight:600}
+.btn.small{display:inline-block;width:auto;padding:7px 14px;font-size:14px;margin:0}
+.note{font-size:12px;color:var(--sub);margin-top:6px}
+.warn{color:var(--red);margin-top:8px}
+.hide{display:none}
+.more{margin:8px 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1>🚤 ボート予想</h1>
+    <div style="text-align:right"><div class="upd" id="upd">読み込み中…</div>
+    <button class="btn small sub2" id="reload">更新</button></div></div>
+  <div class="tabs"><button data-t="yoso" class="on">予想</button><button data-t="hantei">判定</button><button data-t="seiseki">成績</button></div>
+</header>
+<main>
+<section id="yoso">
+  <div class="chips" id="vchips"></div>
+  <div id="ylist"></div>
+  <button class="btn sub2 more hide" id="ymore">もっと見る</button>
+</section>
+
+<section id="hantei" class="hide">
+  <div class="card">
+    <label>かんたん入力(Claudeが返した1行を貼る。入っていれば下の欄は使いません)</label>
+    <textarea id="kantan" placeholder="江戸川 5R / 6.72 6.69 … / .13 .01 … / 123456 / 風3 / 波2 / オッズ 13 4.5, 134 12.5"></textarea>
+    <div class="two"><div><label>会場</label><select id="hk"></select></div><div><label>レース</label><select id="hr"></select></div></div>
+    <label>展示タイム(1号艇から順に)</label><input id="tenji" placeholder="6.72 6.69 6.77 6.80 6.75 6.72">
+    <label>展示ST(Fは F.01 のまま)</label><input id="st" placeholder=".13 .01 .15 .07 .10 .03">
+    <div class="two"><div><label>進入(枠なりなら空欄)</label><input id="shin" placeholder="123456" inputmode="numeric"></div>
+      <div><label>風速(m)</label><input id="wind" inputmode="decimal"></div><div><label>波高(cm)</label><input id="wave" inputmode="decimal"></div></div>
+    <label>オッズ(組と倍率を並べるだけ。2連単 <b>13 4.5</b> / 3連単 <b>134 12.5</b>)</label>
+    <textarea id="odds" placeholder="13 4.5, 31 8.2, 134 12.5, 143 18"></textarea>
+    <div class="two"><div><label>1点の金額(円)</label><input id="kin" type="number" value="100" step="100" min="100"></div>
+      <div><label>判定を記録</label><select id="rec"><option value="1">記録する</option><option value="0">記録しない</option></select></div></div>
+    <button class="btn" id="go">判定する</button>
+    <button class="btn sub2" id="clr">入力をクリア</button>
+  </div>
+  <div id="hout"></div>
+</section>
+
+<section id="seiseki" class="hide">
+  <div id="sout"></div>
+</section>
+</main>
+<script>
+// ===== 予想エンジン(Python版の feats / ml / cal / tri / ex2 と同じ計算) =====
+const NAN = NaN;
+const nz = v => (v === null || v === undefined) ? NAN : Number(v);
+function nanmean(a) { let s = 0, n = 0; for (const v of a) if (!isNaN(v)) { s += v; n++; } return n ? s / n : NAN; }
+function relCols(M, cols) {
+  return cols.map(c => {
+    const col = M.map(r => r[c]);
+    const any = col.some(v => !isNaN(v));
+    const m = any ? nanmean(col) : NAN;
+    return col.map(v => any ? v - m : v);
+  });
+}
+// pv: {wind, wave, wdir, boats:{"1":{et,st,cn},...}} / なしなら null
+function buildX(race, pv) {
+  const X = [], E = [];
+  for (const b of race.boats) {
+    const p = (pv && pv.boats && pv.boats[String(b.n)]) || {};
+    let et = nz(p.et); if (!(et > 0)) et = NAN;
+    const st = nz(p.st);
+    let cn = nz(p.cn); if (!(cn >= 1)) cn = b.n;
+    const wind = pv ? nz(pv.wind) : NAN, wave = pv ? nz(pv.wave) : NAN, wdir = pv ? nz(pv.wdir) : NAN;
+    const c = Math.min(Math.max(Math.round(cn), 1), 6) - 1;
+    X.push([race.sn, b.n, cn, ...b.base.map(nz), et, st, wind, wave]);
+    E.push([wdir, ...b.cs[c].map(nz), ...b.fan[c].map(nz)]);
+  }
+  const rx = relCols(X, [4, 7, 9, 12, 17, 18]);
+  const re = relCols(E, [2, 5, 7, 9, 12]);
+  return X.map((row, i) => [
+    ...row, ...rx.map(col => col[i]),
+    ...E[i].slice(0, 7), re[0][i], re[1][i],
+    ...E[i].slice(7), re[2][i], re[3][i], re[4][i]]);
+}
+function treeVal(t, x) {
+  const [fi, th, mgl, left, right, leaf, val] = t;
+  let i = 0;
+  while (!leaf[i]) {
+    const v = x[fi[i]];
+    i = isNaN(v) ? (mgl[i] ? left[i] : right[i]) : (v <= th[i] ? left[i] : right[i]);
+  }
+  return val[i];
+}
+function rawProb(model, x) {
+  let s = model.base;
+  for (const t of model.trees) s += treeVal(t, x);
+  return 1 / (1 + Math.exp(-s));
+}
+function predict(model, race, pv) {
+  const X = buildX(race, pv);
+  const p = X.map(x => rawProb(model, x));
+  const sp = p.reduce((a, b) => a + b, 0);
+  const p0 = p.map(v => v / sp);
+  return { p0, pc: calib(model, p0) };
+}
+function interp(x, xs, ys) {
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+  let lo = 0, hi = xs.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (xs[m] <= x) lo = m; else hi = m; }
+  const t = xs[hi] === xs[lo] ? 0 : (x - xs[lo]) / (xs[hi] - xs[lo]);
+  return ys[lo] + t * (ys[hi] - ys[lo]);
+}
+function calib(model, p) {
+  const q = p.map(v => Math.min(Math.max(interp(v, model.cal_x, model.cal_y), 0.001), 0.999));
+  const s = q.reduce((a, b) => a + b, 0);
+  return q.map(v => v / s);
+}
+function tri(p) {
+  const out = [];
+  for (let a = 0; a < 6; a++) for (let b = 0; b < 6; b++) { if (b === a) continue;
+    for (let c = 0; c < 6; c++) { if (c === a || c === b) continue;
+      out.push([p[a] * p[b] / (1 - p[a]) * p[c] / (1 - p[a] - p[b]), a + 1, b + 1, c + 1]); } }
+  return out.sort((x, y) => y[0] - x[0]);
+}
+function ex2(p) {
+  const out = [];
+  for (let a = 0; a < 6; a++) for (let b = 0; b < 6; b++) if (a !== b) out.push([p[a] * p[b] / (1 - p[a]), a + 1, b + 1]);
+  return out.sort((x, y) => y[0] - x[0]);
+}
+function level(pw) { return pw >= 0.65 ? ["◎", "堅い"] : pw >= 0.5 ? ["○", "ふつう"] : ["△", "荒れ注意"]; }
+// ===== 画面 =====
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const COLOR = {"◎":"var(--green)","○":"var(--blue)","△":"var(--orange)","✕":"var(--sub)"};
+const badge = (t, c) => `<span class="badge" style="background:${c}">${esc(t)}</span>`;
+const pct = q => `<span class="sub">${Math.round(q * 100)}%</span>`;
+const yen = v => Math.round(v).toLocaleString("ja-JP") + "円";
+const rc = r => `<b style="color:${r >= 1 ? "var(--green)" : "var(--red)"}">${Math.round(r * 100)}%</b>`;
+const big = (l, v, c) => `<div><div class="l">${l}</div><div class="v" ${c ? `style="color:${c}"` : ""}>${v}</div></div>`;
+function table(head, rows, hl) {
+  return `<table><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr>${rows.map((r, i) =>
+    `<tr class="${hl && hl[i] ? hl[i] : ""}">${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</table>`;
+}
+let MODEL = null, TODAY = null, STATS = null, VENUE = "全会場", SHOWN = 12, PRED = {};
+const NAMES = "桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村".split(" ");
+const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+const nowHM = () => { const d = new Date(Date.now() + 9 * 3600e3); return d.toISOString().slice(11, 16); };
+const todayJST = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+
+async function loadAll() {
+  $("upd").textContent = "読み込み中…";
+  const t = Date.now();
+  try {
+    const [tj, sj] = await Promise.all([fetch(`data/today.json?t=${t}`).then(r => r.json()),
+      fetch(`data/stats.json?t=${t}`).then(r => r.json()).catch(() => null)]);
+    TODAY = tj; STATS = sj;
+    const mj = await fetch(`data/model.json?d=${TODAY.date}`).then(r => r.json());
+    MODEL = mj;
+    PRED = {};
+    for (const r of TODAY.races) PRED[`${r.sn}-${r.rn}`] = predict(MODEL, r, r.pv);
+    $("upd").textContent = `データ ${TODAY.date.slice(5).replace("-", "/")} ${TODAY.updated}更新`;
+    renderYoso(); fillSelects(); renderSeiseki();
+  } catch (e) {
+    $("upd").textContent = "読み込めませんでした";
+    $("ylist").innerHTML = `<div class="card warn">データを読み込めませんでした。少し待ってから「更新」を押してください。<br><span class="sub">${esc(e)}</span></div>`;
+  }
+}
+
+// ---- 予想 ----
+function raceCard(r) {
+  const { p0, pc } = PRED[`${r.sn}-${r.rn}`];
+  const b = pc.indexOf(Math.max(...pc)) + 1, pw = pc[b - 1];
+  const [mk, lv] = level(pw), need = pw < 0.5 ? 1.2 : 1.1;
+  const tj = r.pv && r.pv.has ? "展示あり" : "展示前";
+  const e2 = ex2(p0).slice(0, 2), t3 = tri(p0).slice(0, 3);
+  return `<div class="card"><div class="row"><div class="ttl">⏰ ${r.close} ${esc(r.name)} ${r.rn}R</div>${badge(mk + " " + lv, COLOR[mk])}</div>
+    <div class="sub">本命 ${b}号艇(1着 ${Math.round(pw * 100)}%)・${tj}</div>
+    <div class="sec">2連単</div>${table(["買い目", "確率", "買える倍率"], e2.map(([q, a, bb], i) => [`${"①②"[i]} <span class="kume">${a}-${bb}</span>`, pct(q), `<b>${(need / q).toFixed(1)}</b>倍〜`]))}
+    <div class="sec">3連単</div>${table(["買い目", "確率", "買える倍率"], t3.map(([q, a, bb, c], i) => [`${"①②③"[i]} <span class="kume">${a}-${bb}-${c}</span>`, pct(q), `<b>${Math.round(need / q)}</b>倍〜`]))}
+    <button class="btn sub2" onclick="toHantei(${r.sn},${r.rn})">展示・オッズを入れて判定</button></div>`;
+}
+function renderYoso() {
+  const now = nowHM(), isToday = TODAY.date === todayJST();
+  const venues = [...new Set(TODAY.races.map(r => r.name))];
+  $("vchips").innerHTML = ["全会場", ...venues].map(v => `<button class="chip ${v === VENUE ? "on" : ""}" onclick="VENUE='${v}';SHOWN=12;renderYoso()">${v}</button>`).join("");
+  const list = TODAY.races.filter(r => (!isToday || r.close >= now) && (VENUE === "全会場" || r.name === VENUE));
+  $("ylist").innerHTML = list.length ? list.slice(0, SHOWN).map(raceCard).join("")
+    : `<div class="card">これからのレースはありません。<div class="note">データは8時〜21時の間、15分ごとに更新されます。</div></div>`;
+  $("ymore").classList.toggle("hide", list.length <= SHOWN);
+}
+$("ymore").onclick = () => { SHOWN += 12; renderYoso(); };
+
+// ---- 判定 ----
+function fillSelects(sn, rn) {
+  const venues = [...new Set(TODAY.races.map(r => r.sn))];
+  const cur = sn || Number($("hk").value) || venues[0];
+  $("hk").innerHTML = venues.map(s => `<option value="${s}" ${s === cur ? "selected" : ""}>${NAMES[s - 1]}</option>`).join("");
+  const rs = TODAY.races.filter(r => r.sn === cur).sort((a, b) => a.rn - b.rn);
+  const now = nowHM();
+  const curR = rn || Number($("hr").value) || (rs.find(r => r.close >= now) || rs[0] || {}).rn;
+  $("hr").innerHTML = rs.map(r => `<option value="${r.rn}" ${r.rn === curR ? "selected" : ""}>${r.rn}R(${r.close}締切)</option>`).join("");
+}
+$("hk").onchange = () => { $("hr").value = ""; fillSelects(Number($("hk").value)); };
+function toHantei(sn, rn) { showTab("hantei"); fillSelects(sn, rn); $("hout").innerHTML = ""; window.scrollTo(0, 0); }
+const Z = s => String(s || "").replace(/[０-９．，、：＝－ー　]/g, c => ({"．":".","，":",","、":",","：":":","＝":"=","－":"-","ー":"-","　":" "}[c] ?? String.fromCharCode(c.charCodeAt(0) - 0xFEE0)));
+function nums(s, scale) {
+  return Z(s).trim().split(/[\s,\/]+/).filter(Boolean).map(t => { const x = parseFloat(t.replace(/^F/i, "")); return /^F/i.test(t) || isNaN(x) ? null : (x > scale ? x / 100 : x); });
+}
+function parseOdds(s) {
+  const out = []; const re = /(^|[^\d.])([1-6])\s*-?\s*([1-6])(?:\s*-?\s*([1-6]))?\s*[:\s]\s*(\d+(?:\.\d+)?)/g; let m;
+  const t = Z(s); while ((m = re.exec(t))) { const d = [m[2], m[3], m[4]].filter(Boolean).map(Number); if (new Set(d).size === d.length) out.push([d, parseFloat(m[5])]); }
+  return out;
+}
+function hantei() {
+  let sn = Number($("hk").value), rn = Number($("hr").value), tenji = $("tenji").value, st = $("st").value, shin = $("shin").value,
+    wind = $("wind").value, wave = $("wave").value, odds = $("odds").value;
+  const k = Z($("kantan").value).trim();
+  if (k) {
+    const parts = k.split("/").map(x => x.trim());
+    const nm = [...NAMES].sort((a, b) => b.length - a.length).find(n => parts[0].includes(n));
+    const d = parts[0].match(/\d+/g);
+    if (!nm || !d) { $("hout").innerHTML = `<div class="card warn">かんたん入力の最初に「会場 レース番号」を入れてください(例: びわこ 4R)</div>`; return; }
+    sn = NAMES.indexOf(nm) + 1; rn = Number(d[d.length - 1]);
+    const rest = [], od = []; wind = ""; wave = "";
+    for (const p of parts.slice(1)) { if (p.startsWith("オッズ")) od.push(p.slice(3)); else if (p.startsWith("風")) wind = p.replace(/[^\d.]/g, ""); else if (p.startsWith("波")) wave = p.replace(/[^\d.]/g, ""); else rest.push(p); }
+    [tenji, st, shin] = [rest[0] || "", rest[1] || "", rest[2] || ""]; if (od.length) odds = od.join(", ");
+    fillSelects(sn, rn);
+  }
+  const race = TODAY.races.find(r => r.sn === sn && r.rn === rn);
+  if (!race) { $("hout").innerHTML = `<div class="card warn">${NAMES[sn - 1] || ""} ${rn}R は今日のデータにありません</div>`; return; }
+  let pv = race.pv, src = race.pv && race.pv.has ? "自動データ" : "なし", warn = "";
+  if (tenji.trim()) {
+    const et = nums(tenji, 20), sts = st.trim() ? nums(st, 1) : [null, null, null, null, null, null];
+    const cs = Z(shin).replace(/\D/g, "").split("").map(Number);
+    if (et.length !== 6 || sts.length !== 6 || (cs.length && cs.length !== 6)) warn = "展示・ST・進入は6艇分が必要です(今回は使っていません)";
+    else {
+      const pos = {}; cs.forEach((b, i) => pos[b] = i + 1);
+      const num = v => v === "" || isNaN(parseFloat(Z(v))) ? null : parseFloat(Z(v));
+      pv = { wind: num(wind), wave: num(wave), wdir: null, boats: {} };
+      for (let n = 1; n <= 6; n++) pv.boats[n] = { et: et[n - 1], st: sts[n - 1], cn: pos[n] || n };
+      src = "入力値" + (wind || wave ? `・風${wind || "-"}m 波${wave || "-"}cm` : "");
+    }
+  }
+  const { p0, pc } = predict(MODEL, race, pv);
+  const b = pc.indexOf(Math.max(...pc)) + 1, pw = pc[b - 1], [mk, lv] = level(pw), need = pw < 0.5 ? 1.2 : 1.1;
+  const P = {}; ex2(p0).forEach(([q, a, bb]) => P[`${a}-${bb}`] = q); tri(p0).forEach(([q, a, bb, c]) => P[`${a}-${bb}-${c}`] = q);
+  let body = `<div class="sec">狙い目(この倍率以上なら買い)</div>` + table(["買い目", "確率", "買える倍率"],
+    [...ex2(p0).slice(0, 2).map(([q, a, bb]) => [`<span class="sub">2単</span> <span class="kume">${a}-${bb}</span>`, pct(q), `<b>${(need / q).toFixed(1)}</b>倍〜`]),
+     ...tri(p0).slice(0, 3).map(([q, a, bb, c]) => [`<span class="sub">3単</span> <span class="kume">${a}-${bb}-${c}</span>`, pct(q), `<b>${Math.round(need / q)}</b>倍〜`])]);
+  const od = parseOdds(odds);
+  if (od.length) {
+    const rows = [], hl = [], recs = []; let buy = 0;
+    const kin = Math.max(100, Math.round((Number($("kin").value) || 100) / 100) * 100);
+    for (const [cmb, o] of od) {
+      const key = cmb.join("-"), q = P[key], e = q * o, kind = cmb.length === 2 ? "2連単" : "3連単";
+      const m = e >= need ? "◎" : e >= 1 ? "△" : "✕", word = { "◎": "買い", "△": "ギリギリ", "✕": "見送り" }[m];
+      const amt = m === "◎" ? kin : 0; buy += amt;
+      rows.push([`<span style="color:${COLOR[m]};font-weight:700">${m} ${word}</span><br><span class="sub">${kind}</span> <span class="kume">${key}</span>`, `${o}倍`, pct(q), `<b style="color:${COLOR[m]}">${e.toFixed(2)}</b>${amt ? `<br><b style="color:var(--green)">${yen(amt)}</b>` : ""}`]);
+      hl.push(m === "◎" ? "hlg" : m === "△" ? "hly" : "");
+      recs.push({ d: TODAY.date, t: nowHM(), sn, v: NAMES[sn - 1], rn, kind, c: key, o, q: +q.toFixed(4), e: +e.toFixed(3), m, amt });
+    }
+    const nb = recs.filter(r => r.amt).length;
+    body += `<div class="sec">判定</div>` + table(["買い目", "オッズ", "確率", "期待値"], rows, hl) +
+      `<div class="note">期待値 = オッズ × 確率。${need}以上で◎</div>` +
+      `<div class="big">${big("買い", nb + "点", nb ? "var(--green)" : "var(--sub)")}${big("合計", yen(buy))}</div>`;
+    if ($("rec").value === "1") {
+      const all = store.get("judges", []).filter(r => !(r.d === TODAY.date && r.sn === sn && r.rn === rn && recs.some(x => x.c === r.c)));
+      store.set("judges", all.concat(recs));
+      body += `<div class="note">📝 この端末に記録しました(合計${all.length + recs.length}件)</div>`;
+    }
+  } else if (odds.trim()) body += `<div class="warn">オッズが読めません(例: 13 4.5, 134 12.5)</div>`;
+  else body += `<div class="note">オッズを入れて「判定する」を押すと、買うかどうか判定します</div>`;
+  if (warn) body += `<div class="warn">⚠ ${warn}</div>`;
+  $("hout").innerHTML = `<div class="card"><div class="row"><div class="ttl">${esc(race.name)} ${rn}R</div>${badge(mk + " " + lv, COLOR[mk])}</div>
+    <div class="sub">締切 ${race.close}・本命 ${b}号艇(1着 ${Math.round(pw * 100)}%)・展示: ${src}</div>${body}</div>`;
+  $("hout").scrollIntoView({ behavior: "smooth" });
+}
+$("go").onclick = hantei;
+$("clr").onclick = () => { for (const id of ["kantan", "tenji", "st", "shin", "wind", "wave", "odds"]) $(id).value = ""; $("hout").innerHTML = ""; };
+
+// ---- 成績 ----
+function resultOf(d, sn, rn) {
+  if (TODAY && TODAY.date === d) { const r = TODAY.races.find(x => x.sn === sn && x.rn === rn); if (r && r.res) return [r.res.o, r.res.ex, r.res.tri]; }
+  return STATS && STATS.results && STATS.results[d] ? STATS.results[d][`${sn}-${rn}`] : null;
+}
+function renderSeiseki() {
+  let h = "";
+  const js = store.get("judges", []);
+  if (js.length) {
+    let buy = 0, back = 0, nb = 0, hit = 0, sk = 0, skb = 0, wait = 0;
+    const recent = [];
+    for (const r of js) {
+      const res = resultOf(r.d, r.sn, r.rn);
+      let pay = null;
+      if (res) { const [o, ex, tr] = res; pay = r.kind === "2連単" ? (o.slice(0, 3) === r.c ? ex : 0) : (o === r.c ? tr : 0); }
+      if (pay === null) wait++;
+      else if (r.amt) { nb++; buy += r.amt; back += pay * r.amt / 100; if (pay) hit++; }
+      else { sk++; skb += pay; }
+      recent.push([r, res, pay]);
+    }
+    h += `<div class="card"><div class="row"><div class="ttl">あなたの判定の成績</div>${badge(js.length + "件", "var(--blue)")}</div>
+      <div class="sub">この端末に記録した判定(結果待ち ${wait}件)</div>
+      ${nb ? `<div class="big">${big("◎で買った", nb + "点")}${big("的中", hit + "回")}${big("回収率", Math.round(back / buy * 100) + "%", back >= buy ? "var(--green)" : "var(--red)")}</div>
+      ${table(["", ""], [["購入", yen(buy)], ["払戻", yen(back)]])}` : `<div class="note">◎の買い目の結果がまだありません</div>`}
+      ${sk ? `<div class="note">参考: 見送った${sk}点を100円ずつ買っていたら 回収率 ${Math.round(skb / sk)}%</div>` : ""}
+      <div class="sec">最近の判定</div>${table(["買い目", "結果"], recent.slice(-10).reverse().map(([r, res, pay]) =>
+        [`${r.d.slice(5)} ${esc(r.v)}${r.rn}R <span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍 ${r.m}</span>`,
+         pay === null ? `<span class="sub">結果待ち</span>` : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
+        recent.slice(-10).reverse().map(([, , pay]) => pay ? "hlgold" : ""))}
+      <button class="btn sub2" onclick="copyJudges()">記録をコピー(バックアップ用)</button></div>`;
+  } else h += `<div class="card"><div class="ttl">あなたの判定の成績</div><div class="note">「判定」でオッズを入れると、この端末に記録され、ここに成績が出ます。</div></div>`;
+  if (STATS && STATS.all) {
+    const a = STATS.all;
+    const tier = ["◎", "○", "△"].filter(k => STATS.level[k]).map(k => { const s = STATS.level[k];
+      return [`${badge(k + " " + { "◎": "堅い", "○": "ふつう", "△": "荒れ注意" }[k], COLOR[k])} <span class="sub">${s.n}R</span>`, rc(s.r2), rc(s.r3)]; });
+    const days = Object.entries(STATS.days).slice(-7).reverse().map(([d, s]) => [`${d.slice(5)} <span class="sub">${s.n}R</span>`, rc(s.r2), rc(s.r3)]);
+    const ven = Object.entries(STATS.venue).sort((x, y) => y[1].n - x[1].n).map(([v, s]) => [`${esc(v)} <span class="sub">${s.n}R</span>`, rc(s.r2), rc(s.r3)]);
+    h += `<div class="card"><div class="row"><div class="ttl">全レース買った場合(各100円)</div>${badge(STATS.n_days + "日分", "var(--blue)")}</div>
+      <div class="sub">${a.n.toLocaleString()}レース・自動で毎日記録</div>
+      <div class="sec">2連単2点</div><div class="big">${big("的中率", Math.round(a.h2 / a.n * 100) + "%")}${big("回収率", Math.round(a.r2 * 100) + "%", a.r2 >= 1 ? "var(--green)" : "var(--red)")}</div>
+      <div class="sec">3連単3点</div><div class="big">${big("的中率", Math.round(a.h3 / a.n * 100) + "%")}${big("回収率", Math.round(a.r3 * 100) + "%", a.r3 >= 1 ? "var(--green)" : "var(--red)")}</div>
+      <div class="sec">自信度別の回収率</div>${table(["自信度", "2連単", "3連単"], tier)}
+      <div class="sec">最近7日の回収率</div>${table(["日付", "2連単", "3連単"], days)}
+      <div class="sec">会場別の回収率</div>${table(["会場", "2連単", "3連単"], ven)}
+      <div class="note">件数が少ないうちは、たまたまの影響が大きいです。100件以上たまってから判断してください。</div></div>`;
+  }
+  $("sout").innerHTML = h;
+}
+function copyJudges() {
+  const js = store.get("judges", []);
+  const t = "日付,時刻,会場,R,券種,買い目,オッズ,確率,期待値,判定,購入額\n" + js.map(r => [r.d, r.t, r.v, r.rn, r.kind, r.c, r.o, r.q, r.e, r.m, r.amt].join(",")).join("\n");
+  navigator.clipboard.writeText(t).then(() => alert("コピーしました。メモなどに貼って保存できます"), () => prompt("コピーしてください", t));
+}
+
+// ---- タブ ----
+function showTab(t) {
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.t === t));
+  for (const s of ["yoso", "hantei", "seiseki"]) $(s).classList.toggle("hide", s !== t);
+  if (t === "seiseki" && TODAY) renderSeiseki();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
+$("reload").onclick = loadAll;
+loadAll();
+</script>
+</body>
+</html>

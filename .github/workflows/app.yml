@@ -1,0 +1,58 @@
+name: 予想アプリの更新
+
+on:
+  schedule:
+    # 日本時間 6:30(前日の結果整理と学習)
+    - cron: "30 21 * * *"
+    # 日本時間 8:00〜20:45 に15分ごと(GitHubの時刻は日本より9時間遅い)
+    - cron: "*/15 23 * * *"
+    - cron: "*/15 0-11 * * *"
+    # 日本時間 21:00 と 21:30(夜のレースの結果と、今日のまとめ通知)
+    - cron: "0 12 * * *"
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: boatrace-app
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q numpy scikit-learn requests
+      - run: echo "D=$(TZ=Asia/Tokyo date +%Y%m%d)" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@v4
+        with:
+          path: cache
+          key: data-${{ env.D }}
+          restore-keys: data-
+      - name: 予想データを作る
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NISSU: ${{ vars.NISSU }}
+          SHIBORI: ${{ vars.SHIBORI }}
+          KAIJO: ${{ vars.KAIJO }}
+        run: |
+          python app.py update
+          if [ "${{ github.event.schedule }}" = "30 12 * * *" ]; then python app.py summary; fi
+      - uses: actions/cache/save@v4
+        if: always()
+        continue-on-error: true
+        with:
+          path: cache
+          key: data-${{ env.D }}
+      - name: アプリにデータを反映
+        run: |
+          git config user.name "boatrace-bot"
+          git config user.email "boatrace-bot@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet || (git commit -q -m "予想データ更新 $(TZ=Asia/Tokyo date '+%m/%d %H:%M')" && git push -q)
