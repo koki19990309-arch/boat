@@ -10,7 +10,7 @@ on:
         description: "学習に使う日数"
         default: "90"
       mode:
-        description: "backtest(今の買い方) / blend(オッズと混ぜる)"
+        description: "backtest(今の買い方) / blend(オッズと混ぜる) / search(買い方を探す)"
         default: "backtest"
 
 permissions:
@@ -37,7 +37,7 @@ jobs:
           restore-keys: data-
       - name: 検証する
         run: |
-          if [ "${{ inputs.mode }}" = "blend" ]; then python blend.py; else python backtest.py "${{ inputs.test_days }}" "${{ inputs.train_days }}"; fi
+          if [ "${{ inputs.mode }}" = "blend" ]; then python blend.py; elif [ "${{ inputs.mode }}" = "search" ]; then python search.py; else python backtest.py "${{ inputs.test_days }}" "${{ inputs.train_days }}"; fi
       - uses: actions/cache/save@v4
         if: always()
         continue-on-error: true
@@ -48,7 +48,7 @@ jobs:
         run: |
           git config user.name "boatrace-bot"
           git config user.email "boatrace-bot@users.noreply.github.com"
-          git add data/backtest.json data/blend.json 2>/dev/null || git add data/backtest.json
+          git add data/*.json
           git diff --cached --quiet && exit 0
           git commit -q -m "◎の買い方の検証結果"
           for i in 1 2 3; do git pull -q --rebase && git push -q && break; sleep 5; done
