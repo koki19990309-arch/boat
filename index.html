@@ -455,8 +455,19 @@ function showTab(t) {
   if (t === "seiseki" && TODAY) renderSeiseki();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
-$("reload").onclick = loadAll;
-loadAll();
+const APP_VER = "2026111701";
+async function checkVer(force) {   // 新しい版が出ていたら自動で読み込み直す
+  try {
+    const t = await fetch(`./?t=${Date.now()}`, { cache: "no-store" }).then(r => r.text());
+    const v = (t.match(/APP_VER = "(\d+)"/) || [])[1];
+    if (v && v !== APP_VER) { location.replace(`./?v=${v}`); return true; }
+  } catch (e) {}
+  if (force) location.replace(`./?v=${APP_VER}&t=${Date.now()}`);
+  return false;
+}
+$("reload").onclick = () => { $("upd").textContent = "読み込み中…"; checkVer(true); };
+loadAll(); checkVer(false);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVer(false); });
 </script>
 </body>
 </html>
