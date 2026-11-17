@@ -511,15 +511,24 @@ function dayView(recent) {
   const ds = [...new Set(recent.map(([r]) => r.d))].sort().reverse();
   if (!ds.includes(JDAY)) JDAY = ds[0];
   const rs = recent.filter(([r]) => r.d === JDAY).sort((x, y) => (x[0].t || "").localeCompare(y[0].t || "") || x[0].sn - y[0].sn || x[0].rn - y[0].rn);
+  const rmap = new Map();
+  for (const x of rs) { const k = `${x[0].sn}-${x[0].rn}`; if (!rmap.has(k)) rmap.set(k, []); rmap.get(k).push(x); }
+  const races = [...rmap.entries()];
   let buy = 0, back = 0, hit = 0;
   for (const [r, , pay, rt] of rs) if (r.amt && pay !== null) { buy += r.amt; back += pay * r.amt / 100; if (pay && !rt) hit++; }
   return `<div class="sec">日ごとの判定</div>
     <div class="chips">${ds.slice(0, 14).map(d => `<button class="chip ${d === JDAY ? "on" : ""}" onclick="JDAY='${d}';renderSeiseki()">${d.slice(5).replace("-", "/")}</button>`).join("")}</div>
     <div class="sub">${JDAY.slice(5).replace("-", "/")} の判定 ${rs.length}件${buy ? `・◎購入 ${yen(buy)}・払戻 ${yen(back)}・収支 ${pm(back - buy)}` : ""}</div>` +
-    table(["買い目", "結果"], rs.map(([r, res, pay, rt]) =>
-      [`${esc(r.v)}${r.rn}R <span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍</span> <span style="color:${COLOR[r.m] || "inherit"}">${r.m}</span>${r.amt ? ` <span class="sub">${yen(r.amt)}</span>` : ""}`,
-       pay === null ? `<span class="sub">結果待ち</span>` : rt ? badge("返還 " + yen(r.amt || 100), "var(--sub)") : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
-      rs.map(([, , pay, rt]) => pay && !rt ? "hlgold" : ""));
+    races.map(([k, list]) => {
+      const [r0, res] = list[0], won = list.some(([, , pay, rt]) => pay && !rt);
+      const chaku = res ? `着順 <b style="font-size:16px">${res[0]}</b>${res[3] ? ` <span class="sub">返還 ${String(res[3]).split("").join(",")}号艇</span>` : ""}` : `<span class="sub">結果待ち</span>`;
+      return `<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:var(--alt);display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <b>${esc(r0.v)} ${r0.rn}R</b><span>${chaku}${won ? " ⭐" : ""}</span></div>` +
+        table(["買い目", "結果"], list.map(([r, res, pay, rt]) =>
+          [`<span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍</span> <span style="color:${COLOR[r.m] || "inherit"}">${r.m}</span>${r.amt ? ` <span class="sub">${yen(r.amt)}</span>` : ""}`,
+           pay === null ? `<span class="sub">結果待ち</span>` : rt ? badge("返還 " + yen(r.amt || 100), "var(--sub)") : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
+          list.map(([, , pay, rt]) => pay && !rt ? "hlgold" : ""));
+    }).join("");
 }
 function copyJudges() {
   const js = store.get("judges", []).filter(r => r.kind !== "結果");
@@ -534,7 +543,7 @@ function showTab(t) {
   if (t === "seiseki" && TODAY) renderSeiseki();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
-const APP_VER = "2026111704";
+const APP_VER = "2026111705";
 async function checkVer(force) {   // 新しい版が出ていたら自動で読み込み直す
   try {
     const t = await fetch(`./?t=${Date.now()}`, { cache: "no-store" }).then(r => r.text());
