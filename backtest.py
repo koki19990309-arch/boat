@@ -69,9 +69,8 @@ def result(p):
     return o3, ex, tr, ret
 
 
-def main():
-    test_n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
-    train_n = int(sys.argv[2]) if len(sys.argv) > 2 else 90
+def prepare(test_n, train_n):
+    """学習してテスト期間の各レースの確率・オッズ・結果を返す"""
     T = dt.datetime.now(bot.JST).date()
     first = dt.date(2026, 1, 1)
     last_k = min(test_n + 15 + train_n, (T - first).days)
@@ -119,17 +118,26 @@ def main():
     CAL = ISO(out_of_bounds="clip", y_min=0.001, y_max=0.999).fit(P, Y)
     M2 = bot.train([(r[0], r[4], r[5]) for r in TR + CA])
     print(f"学習 {len(TR) + len(CA)}レース / テスト {len(TE)}レース")
-
-    ODDS = {}
-    bets = []   # 1点ごとの記録
-    for k, d, sn, rn, X, pl, (o3, ex, tr, ret) in TE:
+    ODDS, RACES = {}, []
+    for k, d, sn, rn, X, pl, res in TE:
         if d not in ODDS:
             ODDS[d] = tm_odds(d) or {}
         od = ODDS[d].get((sn, rn))
         if not od:
             continue
         _, p0 = bot.ml(M2, X)
-        pc = bot.cal(CAL, p0)
+        RACES.append({"k": k, "d": d, "sn": sn, "rn": rn, "p0": p0, "pc": bot.cal(CAL, p0), "od": od, "res": res})
+    return RACES, len(TR) + len(CA)
+
+
+def main():
+    test_n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
+    train_n = int(sys.argv[2]) if len(sys.argv) > 2 else 90
+    RACES, ntrain = prepare(test_n, train_n)
+    bets = []   # 1点ごとの記録
+    for R in RACES:
+        d, sn, rn, p0, pc, od = R["d"], R["sn"], R["rn"], R["p0"], R["pc"], R["od"]
+        o3, ex, tr, ret = R["res"]
         pw = float(max(pc))
         lv = bot.level(pw)[0]
         need = 1.2 if pw < 0.5 else 1.1
@@ -161,7 +169,7 @@ def main():
     maru = [b for b in bets if b["e"] >= b["need"]]
     out = {"made": dt.datetime.now(bot.JST).strftime("%Y-%m-%d %H:%M"),
            "test_from": min(b["d"] for b in bets), "test_to": max(b["d"] for b in bets),
-           "test_races": len({(b["d"], b["sn"], b["rn"]) for b in bets}), "train_races": len(TR) + len(CA),
+           "test_races": len({(b["d"], b["sn"], b["rn"]) for b in bets}), "train_races": ntrain,
            "all": {k: agg([b for b in bets if b["kind"] == k]) for k in ("2連単", "3連単")},
            "maru": {k: agg([b for b in maru if b["kind"] == k]) for k in ("2連単", "3連単")},
            "maru_total": agg(maru),
