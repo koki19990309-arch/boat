@@ -40,6 +40,13 @@ tr.hlg td{background:var(--hlg)} tr.hly td{background:var(--hly)} tr.hlgold td{b
 .big .l{font-size:12px;color:var(--sub)} .big .v{font-size:21px;font-weight:700}
 .chips{display:flex;gap:6px;overflow-x:auto;padding:4px 0;-webkit-overflow-scrolling:touch}
 .chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:14px}
+.bt{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:5px;font-weight:800;font-size:14px;margin-right:2px;border:1px solid #0003}
+.bt1{background:#fff;color:#111}.bt2{background:#222;color:#fff;border-color:#888}.bt3{background:#e5392f;color:#fff}.bt4{background:#1f5fd6;color:#fff}.bt5{background:#f5d90a;color:#111}.bt6{background:#1d8a3a;color:#fff}
+.race{margin-top:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.race .hd{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--alt);gap:8px}
+.bet{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-top:1px solid var(--line);gap:8px}
+.bet.skip{opacity:.5}.bet.win{background:var(--hlgold)}
+.kd{font-size:11px;color:var(--sub);border:1px solid var(--line);border-radius:4px;padding:1px 4px;margin-right:6px;vertical-align:middle}
 .chip.on{background:var(--blue);border-color:var(--blue);color:#fff}
 label{display:block;font-size:13px;color:var(--sub);margin-top:10px}
 input,select,textarea{width:100%;font-size:16px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-family:inherit}
@@ -521,15 +528,20 @@ function dayView(recent) {
     <div class="sub">${JDAY.slice(5).replace("-", "/")} の判定 ${rs.length}件${buy ? `・◎購入 ${yen(buy)}・払戻 ${yen(back)}・収支 ${pm(back - buy)}` : ""}</div>` +
     races.map(([k, list]) => {
       const [r0, res] = list[0], won = list.some(([, , pay, rt]) => pay && !rt);
-      const chaku = res ? `着順 <b style="font-size:16px">${res[0]}</b>${res[3] ? ` <span class="sub">返還 ${String(res[3]).split("").join(",")}号艇</span>` : ""}` : `<span class="sub">結果待ち</span>`;
-      return `<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:var(--alt);display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <b>${esc(r0.v)} ${r0.rn}R</b><span>${chaku}${won ? " ⭐" : ""}</span></div>` +
-        table(["買い目", "結果"], list.map(([r, res, pay, rt]) =>
-          [`<span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍</span> <span style="color:${COLOR[r.m] || "inherit"}">${r.m}</span>${r.amt ? ` <span class="sub">${yen(r.amt)}</span>` : ""}`,
-           pay === null ? `<span class="sub">結果待ち</span>` : rt ? badge("返還 " + yen(r.amt || 100), "var(--sub)") : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
-          list.map(([, , pay, rt]) => pay && !rt ? "hlgold" : ""));
+      const chaku = res ? `<span class="sub" style="font-size:12px">着順</span> ${boats(res[0])}` : `<span class="sub">結果待ち</span>`;
+      const ret = res && res[3] ? `<div class="sub" style="font-size:12px;padding:0 10px 6px;background:var(--alt)">返還 ${String(res[3]).split("").join("・")}号艇</div>` : "";
+      const sorted = list.slice().sort((a, b) => (b[0].amt ? 1 : 0) - (a[0].amt ? 1 : 0));
+      return `<div class="race"><div class="hd"><b>${esc(r0.v)} ${r0.rn}R${won ? " ⭐" : ""}</b><span>${chaku}</span></div>${ret}` +
+        sorted.map(([r, res, pay, rt]) => {
+          const buy = !!r.amt, win = pay && !rt;
+          const right = pay === null ? `<span class="sub">結果待ち</span>` : rt ? badge("返還 " + yen(r.amt || 100), "var(--sub)")
+            : win ? (buy ? badge("★ " + yen(pay * r.amt / 100), "var(--gold)") : `<span class="sub">当たり(${yen(pay)})</span>`) : `<span class="sub">✕</span>`;
+          return `<div class="bet ${buy ? "" : "skip"} ${win && buy ? "win" : ""}"><div><span class="kd">${r.kind[0]}単</span>${boats(r.c)}
+            <div class="sub" style="font-size:12px;margin-top:3px">${r.o}倍・<span style="color:${COLOR[r.m] || "inherit"}">${r.m}</span> ${buy ? `買い ${yen(r.amt)}` : "見送り"}</div></div><div>${right}</div></div>`;
+        }).join("") + `</div>`;
     }).join("");
 }
+const boats = c => String(c).split("-").map(n => `<span class="bt bt${n}">${n}</span>`).join("");
 function copyJudges() {
   const js = store.get("judges", []).filter(r => r.kind !== "結果");
   const t = "日付,時刻,会場,R,券種,買い目,オッズ,確率,期待値,判定,購入額\n" + js.map(r => [r.d, r.t, r.v, r.rn, r.kind, r.c, r.o, r.q, r.e, r.m, r.amt].join(",")).join("\n");
@@ -543,7 +555,7 @@ function showTab(t) {
   if (t === "seiseki" && TODAY) renderSeiseki();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
-const APP_VER = "2026111705";
+const APP_VER = "2026111706";
 async function checkVer(force) {   // 新しい版が出ていたら自動で読み込み直す
   try {
     const t = await fetch(`./?t=${Date.now()}`, { cache: "no-store" }).then(r => r.text());
