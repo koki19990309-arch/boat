@@ -188,6 +188,44 @@ let MODEL = null, TODAY = null, STATS = null, VENUE = "全会場", SHOWN = 12, P
 const NAMES = "桐生 戸田 江戸川 平和島 多摩川 浜名湖 蒲郡 常滑 津 三国 びわこ 住之江 尼崎 鳴門 丸亀 児島 宮島 徳山 下関 若松 芦屋 福岡 唐津 大村".split(" ");
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+// ---- 自動保存(GitHub) ----
+const REPO = "koki19990309-arch/boat", JPATH = "data/judges.json";
+const jkey = r => `${r.d}|${r.sn}|${r.rn}|${r.c}`;
+const b64e = t => btoa(unescape(encodeURIComponent(t))), b64d = t => decodeURIComponent(escape(atob(t.replace(/\n/g, ""))));
+let SYNC_MSG = "";
+function mergeJ(a, b) { const m = new Map(); for (const r of a.concat(b)) m.set(jkey(r), r); return [...m.values()].sort((x, y) => (x.d + x.t).localeCompare(y.d + y.t)); }
+async function ghGet(tok) {
+  const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${JPATH}?t=${Date.now()}`, { headers: { Authorization: `Bearer ${tok}`, Accept: "application/vnd.github+json" }, cache: "no-store" });
+  if (r.status === 404) return { sha: null, arr: [] };
+  if (!r.ok) throw new Error(r.status === 401 ? "合言葉(トークン)が違うか期限切れです" : r.status === 403 || r.status === 404 ? "トークンの権限が足りません" : "GitHub " + r.status);
+  const j = await r.json(); return { sha: j.sha, arr: JSON.parse(b64d(j.content) || "[]") };
+}
+async function syncJudges(quiet) {
+  const tok = store.get("ghtoken", "");
+  if (!tok) {   // トークンなし: 公開データから読み込むだけ
+    try { const arr = await fetch(`${JPATH}?t=${Date.now()}`).then(r => r.ok ? r.json() : []); store.set("judges", mergeJ(arr, store.get("judges", []))); } catch (e) {}
+    return;
+  }
+  for (let i = 0; i < 3; i++) {
+    try {
+      const { sha, arr } = await ghGet(tok), local = store.get("judges", []), all = mergeJ(arr, local);
+      store.set("judges", all);
+      if (all.length === arr.length && sha) { SYNC_MSG = `✅ 保存済み(${all.length}件)`; break; }
+      const body = { message: `判定の記録 ${todayJST()} ${nowHM()}`, content: b64e(JSON.stringify(all, null, 0)) }; if (sha) body.sha = sha;
+      const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${JPATH}`, { method: "PUT", headers: { Authorization: `Bearer ${tok}`, Accept: "application/vnd.github+json" }, body: JSON.stringify(body) });
+      if (r.ok) { SYNC_MSG = `✅ 自動保存しました(${all.length}件・${nowHM()})`; break; }
+      if (r.status !== 409 && r.status !== 422) throw new Error(r.status === 403 || r.status === 404 ? "トークンの権限が足りません(Contents: Read and write が必要)" : "GitHub " + r.status);
+    } catch (e) { SYNC_MSG = "⚠ 自動保存できませんでした: " + e.message; break; }
+  }
+  if (!quiet && $("syncmsg")) $("syncmsg").textContent = SYNC_MSG;
+}
+function setToken() {
+  const v = $("tokin").value.trim(); if (!v) return;
+  store.set("ghtoken", v); $("tokin").value = ""; SYNC_MSG = "接続中…"; renderSeiseki();
+  syncJudges().then(renderSeiseki);
+}
+function clearToken() { if (confirm("自動保存をやめますか?(この端末の記録は残ります)")) { store.set("ghtoken", ""); SYNC_MSG = ""; renderSeiseki(); } }
+
 const nowHM = () => { const d = new Date(Date.now() + 9 * 3600e3); return d.toISOString().slice(11, 16); };
 const todayJST = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
@@ -204,6 +242,7 @@ async function loadAll() {
     for (const r of TODAY.races) PRED[`${r.sn}-${r.rn}`] = predict(MODEL, r, r.pv);
     $("upd").textContent = `データ ${TODAY.date.slice(5).replace("-", "/")} ${TODAY.updated}更新`;
     renderYoso(); fillSelects(); renderSeiseki();
+    syncJudges(true).then(() => { if (!$("seiseki").classList.contains("hide")) renderSeiseki(); });
   } catch (e) {
     $("upd").textContent = "読み込めませんでした";
     $("ylist").innerHTML = `<div class="card warn">データを読み込めませんでした。少し待ってから「更新」を押してください。<br><span class="sub">${esc(e)}</span></div>`;
@@ -310,7 +349,9 @@ function hantei() {
     if ($("rec").value === "1") {
       const all = store.get("judges", []).filter(r => !(r.d === TODAY.date && r.sn === sn && r.rn === rn && recs.some(x => x.c === r.c)));
       store.set("judges", all.concat(recs));
-      body += `<div class="note">📝 この端末に記録しました(合計${all.length + recs.length}件)</div>`;
+      const tk = store.get("ghtoken", "");
+      body += `<div class="note">📝 記録しました(合計${all.length + recs.length}件)<span id="hsync">${tk ? "・保存中…" : ""}</span></div>`;
+      if (tk) setTimeout(() => syncJudges(true).then(() => { const e = $("hsync"); if (e) e.textContent = "・" + SYNC_MSG; }), 0);
     }
   } else if (odds.trim()) body += `<div class="warn">オッズが読めません(例: 13 4.5, 134 12.5)</div>`;
   else body += `<div class="note">オッズを入れて「判定する」を押すと、買うかどうか判定します</div>`;
@@ -351,8 +392,19 @@ function renderSeiseki() {
         [`${r.d.slice(5)} ${esc(r.v)}${r.rn}R <span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍 ${r.m}</span>`,
          pay === null ? `<span class="sub">結果待ち</span>` : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
         recent.slice(-10).reverse().map(([, , pay]) => pay ? "hlgold" : ""))}
-      <button class="btn sub2" onclick="copyJudges()">記録をコピー(バックアップ用)</button></div>`;
-  } else h += `<div class="card"><div class="ttl">あなたの判定の成績</div><div class="note">「判定」でオッズを入れると、この端末に記録され、ここに成績が出ます。</div></div>`;
+      <button class="btn sub2" onclick="copyJudges()">記録をコピー(手動バックアップ)</button></div>`;
+  } else h += `<div class="card"><div class="ttl">あなたの判定の成績</div><div class="note">「判定」でオッズを入れると記録され、ここに成績が出ます。</div></div>`;
+  h += store.get("ghtoken", "")
+    ? `<div class="card"><div class="row"><div class="ttl">自動保存</div>${badge("オン", "var(--green)")}</div>
+      <div class="sub" id="syncmsg">${esc(SYNC_MSG || "判定するたびにGitHubへ自動で保存します")}</div>
+      <div class="note">履歴を消しても、別の端末でも、アプリを開けば記録が戻ります。</div>
+      <button class="btn sub2" onclick="syncJudges().then(renderSeiseki)">今すぐ保存</button>
+      <button class="btn sub2" onclick="clearToken()">自動保存をやめる</button></div>`
+    : `<div class="card"><div class="row"><div class="ttl">自動保存</div>${badge("オフ", "var(--sub)")}</div>
+      <div class="sub">GitHubのトークンを1回入れると、判定のたびに自動で保存されます。</div>
+      ${SYNC_MSG ? `<div class="warn">${esc(SYNC_MSG)}</div>` : ""}
+      <input id="tokin" type="password" placeholder="github_pat_… を貼り付け" autocomplete="off" style="margin-top:8px">
+      <button class="btn" onclick="setToken()">保存してオンにする</button></div>`;
   if (STATS && STATS.all) {
     const a = STATS.all;
     const tier = ["◎", "○", "△"].filter(k => STATS.level[k]).map(k => { const s = STATS.level[k];
