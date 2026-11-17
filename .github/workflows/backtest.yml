@@ -10,7 +10,7 @@ on:
         description: "学習に使う日数"
         default: "90"
       mode:
-        description: "backtest(今の買い方) / blend(オッズと混ぜる) / search(買い方を探す)"
+        description: "backtest(今の買い方) / blend(オッズと混ぜる) / search(買い方を探す) / experiment(ChatGPT案)"
         default: "backtest"
 
 permissions:
@@ -23,7 +23,7 @@ concurrency:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,7 +37,7 @@ jobs:
           restore-keys: data-
       - name: 検証する
         run: |
-          if [ "${{ inputs.mode }}" = "blend" ]; then python blend.py; elif [ "${{ inputs.mode }}" = "search" ]; then python search.py; else python backtest.py "${{ inputs.test_days }}" "${{ inputs.train_days }}"; fi
+          if [ "${{ inputs.mode }}" = "blend" ]; then python blend.py; elif [ "${{ inputs.mode }}" = "search" ]; then python search.py; elif [ "${{ inputs.mode }}" = "experiment" ]; then python experiment.py; else python backtest.py "${{ inputs.test_days }}" "${{ inputs.train_days }}"; fi
       - uses: actions/cache/save@v4
         if: always()
         continue-on-error: true

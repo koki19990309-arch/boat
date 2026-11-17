@@ -27,6 +27,15 @@ TM = "https://turnmark.github.io/api/v1/{y}/{d8}.json"
 
 
 def tm_odds(d):
+    """Turnmark の1日分: 各レースのオッズ(2単/3単/3複/2複)・払戻・返還艇。cache/ に保存して再利用"""
+    import gzip
+    fn = os.path.join(bot.cache_dir(), f"tm_{d.strftime('%Y%m%d')}.json.gz")
+    if os.path.exists(fn):
+        try:
+            with gzip.open(fn, "rt", encoding="utf-8") as fh:
+                return {tuple(map(int, k.split("-"))): v for k, v in json.load(fh).items()}
+        except Exception:
+            pass
     try:
         r = requests.get(TM.format(y=d.year, d8=d.strftime("%Y%m%d")), timeout=60)
         if r.status_code != 200:
@@ -38,8 +47,19 @@ def tm_odds(d):
     for sn, s in st.items():
         for rn, race in (s.get("races") or {}).items():
             od = race.get("odds") or {}
-            out[(int(sn), int(rn))] = {"ex": od.get("exacta") or {}, "tri": od.get("trifecta") or {}}
-    return out
+            res = race.get("result") or {}
+            pays = {}
+            for k, lst in (res.get("payouts") or {}).items():
+                if k in ("trifecta", "exacta", "trio", "quinella"):
+                    pays[k] = {x["combination"]: x["amount"] for x in (lst or []) if x.get("combination") and x.get("amount")}
+            out[f"{int(sn)}-{int(rn)}"] = {"ex": od.get("exacta") or {}, "tri": od.get("trifecta") or {},
+                                           "trio": od.get("trio") or {}, "qn": od.get("quinella") or {},
+                                           "pay": pays, "ref": res.get("refunds") or []}
+    if out and d < dt.datetime.now(bot.JST).date() - dt.timedelta(days=1):
+        os.makedirs(bot.cache_dir(), exist_ok=True)
+        with gzip.open(fn, "wt", encoding="utf-8") as fh:
+            json.dump(out, fh)
+    return {tuple(map(int, k.split("-"))): v for k, v in out.items()}
 
 
 def odd(o, c):
@@ -126,7 +146,10 @@ def prepare(test_n, train_n):
         if not od:
             continue
         _, p0 = bot.ml(M2, X)
-        RACES.append({"k": k, "d": d, "sn": sn, "rn": rn, "p0": p0, "pc": bot.cal(CAL, p0), "od": od, "res": res})
+        RACES.append({"k": k, "d": d, "sn": sn, "rn": rn, "p0": p0, "pc": bot.cal(CAL, p0), "od": od, "res": res,
+                      "X": X, "pl": pl})
+    prepare.train = [(r[4], r[5]) for r in TR + CA]   # 学習期間のレース(特徴量, 着順)
+    prepare.M2 = M2
     return RACES, len(TR) + len(CA)
 
 
