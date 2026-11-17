@@ -13,7 +13,7 @@ DATA = os.path.join(HERE, "data")
 os.makedirs(DATA, exist_ok=True)
 REC = os.path.join(DATA, "records.csv")
 RCOLS = ["日付", "会場", "場番号", "R", "自信", "本命", "確率", "2単予想", "3単予想",
-         "結果", "2単払戻", "3単払戻", "2単的中払戻", "3単的中払戻"]
+         "結果", "2単払戻", "3単払戻", "2単的中払戻", "3単的中払戻", "返還"]
 CLS = {1: "A1", 2: "A2", 3: "B1", 4: "B2"}
 bot.STATE_FILE = os.path.join(DATA, "notify_state.json")  # 通知済みの記録はリポジトリに残す
 
@@ -68,7 +68,19 @@ def result_of(p):
     o = "%d-%d-%d" % (pl[1], pl[2], pl[3])
     ex = sum(x["payout"] for x in p["payouts"].get("exacta", []) if x["combination"] == o[:3])
     tr = sum(x["payout"] for x in p["payouts"].get("trifecta", []) if x["combination"] == o)
-    return {"o": o, "ex": ex, "tri": tr}
+    ret = ""   # 返還艇(フライング・出遅れ・欠場)
+    for b in p["boats"]:
+        try:
+            if int(b["racer_place_number"]) in (14, 15, 16):
+                ret += str(b["racer_boat_number"])
+        except Exception:
+            pass
+    return {"o": o, "ex": ex, "tri": tr, "ret": "".join(sorted(ret))}
+
+
+def back(combos, hit, pay, ret):
+    """買い目ごとの払戻(100円あたり)の合計。返還艇を含む買い目は100円戻る"""
+    return sum(pay if c == hit else (100 if any(ch in ret for ch in c.split("-")) else 0) for c in combos)
 
 
 def race_json(sn, rn, race, pvr, d):
@@ -134,9 +146,9 @@ def update_records(M2, CAL, days):
                 "日付": d.isoformat(), "会場": bot.NAMES[key[0] - 1], "場番号": sn, "R": rn,
                 "自信": bot.level(float(pc[b - 1]))[0], "本命": b, "確率": round(float(pc[b - 1]), 3),
                 "2単予想": " ".join(c2), "3単予想": " ".join(c3), "結果": res["o"],
-                "2単払戻": res["ex"] if res["o"][:3] in c2 else 0,
-                "3単払戻": res["tri"] if res["o"] in c3 else 0,
-                "2単的中払戻": res["ex"], "3単的中払戻": res["tri"]}
+                "2単払戻": back(c2, res["o"][:3], res["ex"], res["ret"]),
+                "3単払戻": back(c3, res["o"], res["tri"], res["ret"]),
+                "2単的中払戻": res["ex"], "3単的中払戻": res["tri"], "返還": res["ret"]}
     save_records(list(rows.values()))
     return list(rows.values())
 
@@ -148,20 +160,24 @@ def make_stats(rows):
             return None
         e2 = [float(r["2単払戻"]) for r in rs]
         e3 = [float(r["3単払戻"]) for r in rs]
-        return {"n": n, "h2": sum(1 for v in e2 if v > 0), "r2": sum(e2) / (200 * n),
-                "h3": sum(1 for v in e3 if v > 0), "r3": sum(e3) / (300 * n),
+        h2 = sum(1 for r in rs if r["結果"][:3] in r["2単予想"].split())
+        h3 = sum(1 for r in rs if r["結果"] in r["3単予想"].split())
+        return {"n": n, "h2": h2, "r2": sum(e2) / (200 * n),
+                "h3": h3, "r3": sum(e3) / (300 * n),
                 "b2": 200 * n, "p2": sum(e2), "b3": 300 * n, "p3": sum(e3)}
     by = lambda k: {v: agg([r for r in rows if r[k] == v]) for v in sorted({r[k] for r in rows})}
     days = sorted({r["日付"] for r in rows})
     res = {}
     for r in rows:
         if r["日付"] >= (dt.date.fromisoformat(days[-1]) - dt.timedelta(days=40)).isoformat():
-            res.setdefault(r["日付"], {})[f'{r["場番号"]}-{r["R"]}'] = [r["結果"], float(r["2単的中払戻"]), float(r["3単的中払戻"])]
+            res.setdefault(r["日付"], {})[f'{r["場番号"]}-{r["R"]}'] = [r["結果"], float(r["2単的中払戻"]), float(r["3単的中払戻"]), r.get("返還") or ""]
     return {"all": agg(rows), "level": by("自信"), "venue": by("会場"),
             "days": {d: agg([r for r in rows if r["日付"] == d]) for d in days[-14:]},
             "results": res, "n_days": len(days),
-            "hits": [[r["日付"], r["会場"], int(r["R"]), r["自信"], r["結果"], float(r["2単払戻"]), float(r["3単払戻"])]
-                     for r in rows if float(r["2単払戻"]) > 0 or float(r["3単払戻"]) > 0][-60:]}
+            "hits": [[r["日付"], r["会場"], int(r["R"]), r["自信"], r["結果"],
+                      float(r["2単的中払戻"]) if r["結果"][:3] in r["2単予想"].split() else 0,
+                      float(r["3単的中払戻"]) if r["結果"] in r["3単予想"].split() else 0]
+                     for r in rows if r["結果"][:3] in r["2単予想"].split() or r["結果"] in r["3単予想"].split()][-60:]}
 
 
 def cmd_update():

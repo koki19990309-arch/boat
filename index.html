@@ -91,7 +91,7 @@ textarea{min-height:70px;resize:vertical}
   <div class="card">
     <div class="ttl">結果を入れる</div>
     <div class="sub">競艇日和の「結果」画面で払戻金の表を長押し→コピーして貼るか、Claudeが返した1行を貼る</div>
-    <textarea id="kekka" placeholder="唐津 3R / 結果 125 7180 / 12 740"></textarea>
+    <textarea id="kekka" placeholder="唐津 3R / 結果 125 7180 / 12 740 / 返還 12"></textarea>
     <div class="two"><div><label>会場(貼った文から自動)</label><select id="kk"></select></div><div><label>レース</label><select id="kr"></select></div></div>
     <button class="btn" id="kgo">結果を記録</button>
     <div id="kout"></div>
@@ -374,8 +374,15 @@ $("go").onclick = hantei;
 $("clr").onclick = () => { for (const id of ["kantan", "tenji", "st", "shin", "wind", "wave", "odds"]) $(id).value = ""; $("hout").innerHTML = ""; };
 
 // ---- 成績 ----
+// 払戻(100円あたり)と返還かどうか。返還艇を含む買い目は100円戻る
+function payOf(r, res) {
+  if (!res) return [null, false];
+  const [o, ex, tr, ret] = res, rt = String(ret || "");
+  if (rt && r.c.split("-").some(b => rt.includes(b))) return [100, true];
+  return [r.kind === "2連単" ? (o.slice(0, 3) === r.c ? ex : 0) : (o === r.c ? tr : 0), false];
+}
 function resultOf(d, sn, rn) {
-  if (TODAY && TODAY.date === d) { const r = TODAY.races.find(x => x.sn === sn && x.rn === rn); if (r && r.res) return [r.res.o, r.res.ex, r.res.tri]; }
+  if (TODAY && TODAY.date === d) { const r = TODAY.races.find(x => x.sn === sn && x.rn === rn); if (r && r.res) return [r.res.o, r.res.ex, r.res.tri, r.res.ret || ""]; }
   const auto = STATS && STATS.results && STATS.results[d] ? STATS.results[d][`${sn}-${rn}`] : null;
   return auto || manualRes(d, sn, rn);
 }
@@ -387,19 +394,18 @@ function renderSeiseki() {
     const recent = [];
     for (const r of js) {
       const res = resultOf(r.d, r.sn, r.rn);
-      let pay = null;
-      if (res) { const [o, ex, tr] = res; pay = r.kind === "2連単" ? (o.slice(0, 3) === r.c ? ex : 0) : (o === r.c ? tr : 0); }
+      const [pay, isRet] = payOf(r, res);
       if (pay === null) wait++;
-      else if (r.amt) { nb++; buy += r.amt; back += pay * r.amt / 100; if (pay) hit++; }
+      else if (r.amt) { nb++; buy += r.amt; back += pay * r.amt / 100; if (pay && !isRet) hit++; }
       else { sk++; skb += pay; }
-      recent.push([r, res, pay]);
+      recent.push([r, res, pay, isRet]);
     }
     h += `<div class="card"><div class="row"><div class="ttl">あなたの判定の成績</div>${badge(js.length + "件", "var(--blue)")}</div>
       <div class="sub">この端末に記録した判定(結果待ち ${wait}件)</div>
       ${nb ? `<div class="big">${big("◎で買った", nb + "点")}${big("的中", hit + "回")}${big("回収率", Math.round(back / buy * 100) + "%", back >= buy ? "var(--green)" : "var(--red)")}</div>
       ${table(["", ""], [["購入", yen(buy)], ["払戻", yen(back)], ["収支", pm(back - buy)]])}` : `<div class="note">◎の買い目の結果がまだありません</div>`}
-      ${recent.some(([r, , pay]) => pay && r.amt) ? `<div class="sec">当たった買い目</div>` + table(["レース", "買い目", "配当", "払戻"],
-        recent.filter(([r, , pay]) => pay && r.amt).reverse().slice(0, 30).map(([r, , pay]) => [`${r.d.slice(5)} ${esc(r.v)}${r.rn}R`, `<span class="sub">${r.kind[0]}単</span> <b>${r.c}</b>`, yen(pay), `<b style="color:var(--gold)">${yen(pay * r.amt / 100)}</b>`])) : ""}
+      ${recent.some(([r, , pay, rt]) => pay && !rt && r.amt) ? `<div class="sec">当たった買い目</div>` + table(["レース", "買い目", "配当", "払戻"],
+        recent.filter(([r, , pay, rt]) => pay && !rt && r.amt).reverse().slice(0, 30).map(([r, , pay]) => [`${r.d.slice(5)} ${esc(r.v)}${r.rn}R`, `<span class="sub">${r.kind[0]}単</span> <b>${r.c}</b>`, yen(pay), `<b style="color:var(--gold)">${yen(pay * r.amt / 100)}</b>`])) : ""}
       ${sk ? `<div class="note">参考: 見送った${sk}点を100円ずつ買っていたら 回収率 ${Math.round(skb / sk)}%</div>` : ""}
       ${dayView(recent)}
       <button class="btn sub2" onclick="copyJudges()">記録をコピー(手動バックアップ)</button></div>`;
@@ -455,7 +461,7 @@ function parseKekka(text) {
       if (kind === "2連単" && digs.length >= 2 && !out.ex) { out.e = digs.slice(0, 2).join("-"); out.ex = pay; }
     }
   } else {   // 「結果 125 7180 / 12 740」形式
-    const body = t.replace(/^[^\/]*R/i, "").replace(/結果/g, " ").replace(/(\d),(\d{3})/g, "$1$2");
+    const body = t.replace(/^[^\/]*R/i, "").replace(/返還(?:艇)?[\s:：]*[1-6](?:[^\d]{0,4}[1-6])*/g, " ").replace(/結果/g, " ").replace(/(\d),(\d{3})/g, "$1$2");
     const tk = body.split(/[\s,\/円]+/).filter(Boolean);
     for (let i = 0; i < tk.length - 1; i++) {
       const c = tk[i].replace(/-/g, ""), pay = parseInt(tk[i + 1].replace(/,/g, ""));
@@ -463,6 +469,8 @@ function parseKekka(text) {
       else if (/^[1-6]{2}$/.test(c) && c[0] !== c[1] && !out.ex) { out.e = c.split("").join("-"); out.ex = pay; i++; }
     }
   }
+  const rv = t.match(/返還(?:艇)?[\s:：]*([1-6](?:[^\d]{0,4}[1-6])*)/);
+  out.ret = rv ? [...new Set(rv[1].match(/[1-6]/g))].sort().join("") : "";
   if (out.o && !out.e) { out.e = out.o.slice(0, 3); }
   return out;
 }
@@ -482,14 +490,15 @@ function kekka() {
   const sn = Number($("kk").value), rn = Number($("kr").value);
   if (!k.o || !k.tri) { $("kout").innerHTML = `<div class="warn">3連単の組番と払戻金が読めませんでした。表の「勝式」から「複勝」まで選んでコピーしてください。</div>`; return; }
   if (!k.ex) { $("kout").innerHTML = `<div class="warn">2連単の払戻金が読めませんでした。2連単の行も入るようにコピーしてください。</div>`; return; }
-  const d = todayJST(), res = [k.o, k.ex, k.tri];
+  const d = todayJST(), res = [k.o, k.ex, k.tri, k.ret];
   const all = store.get("judges", []).filter(x => !(x.kind === "結果" && x.d === d && x.sn === sn && x.rn === rn));
   all.push({ d, t: nowHM(), sn, v: NAMES[sn - 1], rn, kind: "結果", c: "RES", res, m: "", amt: 0 });
   store.set("judges", all);
   const mine = all.filter(x => x.kind !== "結果" && x.d === d && x.sn === sn && x.rn === rn);
-  const hits = mine.filter(x => (x.kind === "2連単" ? k.e : k.o) === x.c);
-  $("kout").innerHTML = `<div class="note">📝 ${NAMES[sn - 1]} ${rn}R の結果を記録: <b>${k.o}</b>(3連単 ${yen(k.tri)}・2連単 ${yen(k.ex)})</div>` +
-    (mine.length ? (hits.length ? hits.map(x => `<div>${badge("★ 的中 " + x.kind + " " + x.c + " " + yen((x.kind === "2連単" ? k.ex : k.tri) * (x.amt || 100) / 100), "var(--gold)")}</div>`).join("") : `<div class="sub">判定した買い目 ${mine.length}点はハズレでした</div>`)
+  const rets = mine.filter(x => payOf(x, res)[1]);
+  const hits = mine.filter(x => !payOf(x, res)[1] && (x.kind === "2連単" ? k.e : k.o) === x.c);
+  $("kout").innerHTML = `<div class="note">📝 ${NAMES[sn - 1]} ${rn}R の結果を記録: <b>${k.o}</b>(3連単 ${yen(k.tri)}・2連単 ${yen(k.ex)}${k.ret ? `・返還 ${k.ret.split("").join(",")}号艇` : ""})</div>` +
+    (mine.length ? (hits.length ? hits.map(x => `<div>${badge("★ 的中 " + x.kind + " " + x.c + " " + yen((x.kind === "2連単" ? k.ex : k.tri) * (x.amt || 100) / 100), "var(--gold)")}</div>`).join("") : (rets.length ? "" : `<div class="sub">判定した買い目 ${mine.length}点はハズレでした</div>`)) + (rets.length ? `<div class="sub">返還: ${rets.map(x => x.c).join(", ")}(お金が戻ります)</div>` : "")
       : `<div class="sub">このレースの判定はありません(今日の日付で記録しました)</div>`);
   $("kekka").value = "";
   renderSeiseki();
@@ -503,14 +512,14 @@ function dayView(recent) {
   if (!ds.includes(JDAY)) JDAY = ds[0];
   const rs = recent.filter(([r]) => r.d === JDAY).sort((x, y) => (x[0].t || "").localeCompare(y[0].t || "") || x[0].sn - y[0].sn || x[0].rn - y[0].rn);
   let buy = 0, back = 0, hit = 0;
-  for (const [r, , pay] of rs) if (r.amt && pay !== null) { buy += r.amt; back += pay * r.amt / 100; if (pay) hit++; }
+  for (const [r, , pay, rt] of rs) if (r.amt && pay !== null) { buy += r.amt; back += pay * r.amt / 100; if (pay && !rt) hit++; }
   return `<div class="sec">日ごとの判定</div>
     <div class="chips">${ds.slice(0, 14).map(d => `<button class="chip ${d === JDAY ? "on" : ""}" onclick="JDAY='${d}';renderSeiseki()">${d.slice(5).replace("-", "/")}</button>`).join("")}</div>
     <div class="sub">${JDAY.slice(5).replace("-", "/")} の判定 ${rs.length}件${buy ? `・◎購入 ${yen(buy)}・払戻 ${yen(back)}・収支 ${pm(back - buy)}` : ""}</div>` +
-    table(["買い目", "結果"], rs.map(([r, res, pay]) =>
+    table(["買い目", "結果"], rs.map(([r, res, pay, rt]) =>
       [`${esc(r.v)}${r.rn}R <span class="sub">${r.kind[0]}単</span> <b>${r.c}</b> <span class="sub">${r.o}倍</span> <span style="color:${COLOR[r.m] || "inherit"}">${r.m}</span>${r.amt ? ` <span class="sub">${yen(r.amt)}</span>` : ""}`,
-       pay === null ? `<span class="sub">結果待ち</span>` : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
-      rs.map(([, , pay]) => pay ? "hlgold" : ""));
+       pay === null ? `<span class="sub">結果待ち</span>` : rt ? badge("返還 " + yen(r.amt || 100), "var(--sub)") : pay ? badge("★ " + yen(pay * (r.amt || 100) / 100), "var(--gold)") : "✕"]),
+      rs.map(([, , pay, rt]) => pay && !rt ? "hlgold" : ""));
 }
 function copyJudges() {
   const js = store.get("judges", []).filter(r => r.kind !== "結果");
@@ -525,7 +534,7 @@ function showTab(t) {
   if (t === "seiseki" && TODAY) renderSeiseki();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.t));
-const APP_VER = "2026111703";
+const APP_VER = "2026111704";
 async function checkVer(force) {   // 新しい版が出ていたら自動で読み込み直す
   try {
     const t = await fetch(`./?t=${Date.now()}`, { cache: "no-store" }).then(r => r.text());

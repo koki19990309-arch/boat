@@ -84,7 +84,7 @@ def hist_add(rs, d):
             if key in SEEN:
                 continue
             try:
-                pl = int(b.get("racer_place_number"))
+                pl = min(int(b.get("racer_place_number")), 6)  # 7以上は失格・欠場のコード
             except Exception:
                 pl = 6  # 失格・転覆など
             SEEN.add(key)
